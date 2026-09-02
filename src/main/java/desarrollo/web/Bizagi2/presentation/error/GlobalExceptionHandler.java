@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, message);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleGenericException(Exception exception) {
+        // No exponer detalles internos al cliente; loguear el error real
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+    }
+
     private ResponseEntity<ApiErrorResponse> error(HttpStatus status, String message) {
         ApiErrorResponse body = new ApiErrorResponse(status.value(), message, Instant.now().toString());
         return ResponseEntity.status(status).body(body);
