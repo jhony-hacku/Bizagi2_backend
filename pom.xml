@@ -25,6 +25,16 @@
 		<sonar.coverage.jacoco.xmlReportPaths>
 			${project.build.directory}/site/jacoco/jacoco.xml
 		</sonar.coverage.jacoco.xmlReportPaths>
+
+		<!-- Exclusiones de cobertura para SonarCloud -->
+		<sonar.coverage.exclusions>
+			**/entities/**,
+			**/dto/**,
+			**/config/**,
+			**/security/*Config.java,
+			**/exception/*Exception.java,
+			**/Bizagi2Application.java
+		</sonar.coverage.exclusions>
 	</properties>
 	<dependencies>
 		<!-- Spring Web -->
@@ -144,6 +154,16 @@
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.14</version>
+				<configuration>
+					<excludes>
+						<exclude>**/entities/**</exclude>
+						<exclude>**/dto/**</exclude>
+						<exclude>**/config/**</exclude>
+						<exclude>**/security/*Config.*</exclude>
+						<exclude>**/exception/*Exception.*</exclude>
+						<exclude>**/Bizagi2Application.*</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<execution>
 						<id>prepare-agent</id>
