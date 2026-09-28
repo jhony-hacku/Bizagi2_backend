@@ -1,4 +1,4 @@
-package desarrollo.web.Bizagi2.infrastructure.security;
+package desarrollo.web.Bizagi2.security;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;

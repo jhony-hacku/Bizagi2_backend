@@ -1,4 +1,4 @@
-package desarrollo.web.Bizagi2.infrastructure.security;
+package desarrollo.web.Bizagi2.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
