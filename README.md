@@ -1,371 +1,158 @@
-# Bizagi2 Backend — Sistema de Gestion y Modelado de Procesos
+# Bizagi2 Backend
 
-Backend desarrollado en **Java (Spring Boot)** aplicando los principios de **Clean Architecture / Arquitectura Hexagonal**, **Spring Security con JWT (JJWT 0.12.6)**, **JPA / Hibernate**, soporte para **PostgreSQL** y base de datos en memoria **H2**, documentacion interactiva con **Swagger / OpenAPI 3**, y suite completa de pruebas unitarias y de integracion.
+Sistema de gestion de procesos multiempresa (visor y editor de procesos). Spring Boot 4.1.1, Java 25, JPA/Hibernate, PostgreSQL y autenticacion con JWT.
 
----
+Cada empresa se registra con su administrador, crea colaboradores con distintos roles y modela sus procesos como un diagrama (pools, lanes, actividades, gateways, arcos, mensajes y correlaciones). La informacion de una empresa nunca es visible para otra.
 
-## 1. Arquitectura del Proyecto
-
-El codigo esta estructurado siguiendo una **Arquitectura Limpia / Hexagonal**, separando las responsabilidades en capas desacopladas donde el dominio no depende de ningun framework ni tecnologia de persistencia.
+## Estructura
 
 ```text
-src/
-├── main/
-│   ├── java/desarrollo/web/Bizagi2/
-│   │   ├── Bizagi2Application.java
-│   │   │
-│   │   ├── domain/                              # Dominio puro (independiente de frameworks)
-│   │   │   ├── model/
-│   │   │   │   ├── User.java                    # Modelo de dominio de usuario
-│   │   │   │   └── UserRole.java                # Enum: USER, ADMIN
-│   │   │   └── repository/
-│   │   │       └── UserRepository.java          # Interfaz de persistencia del dominio
-│   │   │
-│   │   ├── application/                         # Casos de uso, DTOs y excepciones
-│   │   │   ├── dto/
-│   │   │   │   ├── LoginRequest.java            # DTO de login con validaciones
-│   │   │   │   ├── LoginResponse.java           # DTO con token JWT y datos de sesion
-│   │   │   │   ├── RegisterRequest.java         # DTO de registro con validaciones
-│   │   │   │   └── RegisterResponse.java        # DTO de respuesta segura sin hash
-│   │   │   ├── exception/
-│   │   │   │   ├── EmailAlreadyExistsException.java  (409 Conflict)
-│   │   │   │   └── InvalidCredentialsException.java  (401 Unauthorized)
-│   │   │   └── usecase/
-│   │   │       ├── LoginUseCase.java            # Logica de validacion de credenciales y JWT
-│   │   │       └── RegisterUserUseCase.java     # Logica de hashing BCrypt y registro
-│   │   │
-│   │   ├── infrastructure/                      # Adaptadores tecnologicos y frameworks
-│   │   │   ├── persistence/
-│   │   │   │   ├── UserEntity.java              # Entidad JPA mapeada a la tabla "users"
-│   │   │   │   ├── SpringDataUserJpaRepository.java  # Spring Data JPA
-│   │   │   │   └── UserRepositoryImpl.java      # Adaptador Domain <-> JPA Entity
-│   │   │   └── security/
-│   │   │       ├── JwtService.java              # Generacion, firma y validacion de tokens
-│   │   │       ├── JwtAuthenticationFilter.java # Filtro OncePerRequest para Bearer JWT
-│   │   │       ├── SecurityConfig.java          # Configuracion de Spring Security stateless
-│   │   │       ├── PasswordConfig.java          # BCryptPasswordEncoder
-│   │   │       ├── RestAuthenticationEntryPoint.java # Manejador de 401 en formato JSON
-│   │   │       └── OpenApiConfig.java           # Esquema global Bearer Auth para Swagger
-│   │   │
-│   │   ├── presentation/                        # Capa Web / Controladores REST
-│   │   │   ├── controller/
-│   │   │   │   ├── AuthController.java          # POST /api/auth/register y /login
-│   │   │   │   └── UserController.java          # GET /api/users/me (protegido por JWT)
-│   │   │   └── error/
-│   │   │       ├── GlobalExceptionHandler.java  # Manejo centralizado de excepciones
-│   │   │       └── ApiErrorResponse.java        # Estructura JSON consistente de error
-│   │   │
-│   │   ├── entities/                            # Entidades JPA del modelador BPMN (conservadas)
-│   │   │   ├── Empresa.java
-│   │   │   ├── Usuario.java                     # Usuario de negocio BPMN (tabla "usuarios")
-│   │   │   ├── Proceso.java
-│   │   │   ├── Pool.java
-│   │   │   ├── Lane.java
-│   │   │   ├── NodoFlujo.java                  # Herencia SINGLE_TABLE
-│   │   │   ├── Actividad.java                  # extends NodoFlujo
-│   │   │   ├── Gateway.java                    # extends NodoFlujo
-│   │   │   ├── Arco.java
-│   │   │   ├── Mensaje.java
-│   │   │   ├── Correlacion.java
-│   │   │   ├── RolProceso.java
-│   │   │   ├── RolAcceso.java
-│   │   │   ├── EstadoProceso.java
-│   │   │   ├── TipoGateway.java
-│   │   │   └── TipoParticipante.java
-│   │   │
-│   │   └── repository/                         # Repositorios JPA de procesos BPMN
-│   │       ├── UsuarioRepository.java
-│   │       ├── ProcesoRepository.java
-│   │       ├── ArcoRepository.java
-│   │       ├── CorrelacionRepository.java
-│   │       ├── EmpresaRepository.java
-│   │       ├── LaneRepository.java
-│   │       ├── MensajeRepository.java
-│   │       ├── NodoFlujoRepository.java
-│   │       ├── PoolRepository.java
-│   │       └── RolProcesoRepository.java
-│   │
-│   └── resources/
-│       ├── application.properties               # Configuracion PostgreSQL / Produccion
-│       └── application-dev.properties           # Perfil local con H2 y consola web
-│
-└── test/
-    ├── java/desarrollo/web/Bizagi2/
-    │   ├── Bizagi2ApplicationTests.java
-    │   ├── application/usecase/
-    │   │   ├── LoginUseCaseTest.java            # Pruebas unitarias de Login
-    │   │   └── RegisterUserUseCaseTest.java     # Pruebas unitarias de Registro
-    │   └── presentation/controller/
-    │       └── AuthIntegrationTest.java         # 10 pruebas de integracion completas
-    └── resources/
-        └── application-test.properties          # Configuracion H2 para ejecucion de tests
+src/main/java/desarrollo/web/Bizagi2/
+  entities/     Entidades JPA y enums (el modelo de la base de datos)
+  repository/   Repositorios Spring Data JPA (uno por tabla)
+  service/      Reglas de negocio y transacciones (uno por entidad)
+  controller/   Endpoints REST: solo interpretan HTTP y llaman al servicio
+  exception/    Excepciones de dominio y GlobalExceptionHandler
+  security/     JWT, filtro de autenticacion y reglas por rol
 ```
 
----
+Flujo de una peticion: `controller -> service -> repository -> base de datos`. El controlador no toca el repositorio; el servicio aplica las reglas y resuelve las asociaciones.
 
-## 2. Modelo de Base de Datos y Coexistencia de Entidades
+## Configuracion
 
-El proyecto mantiene una separacion clara entre el **Modulo de Autenticacion** y el **Modulo de Procesos/BPMN**:
+Las credenciales van en un archivo `.env` en la raiz del proyecto (esta en `.gitignore`, no se sube al repo). Copia la plantilla y ajusta los valores:
 
-```text
-               ┌───────────────────────────────────────────────────────────┐
-               │              MODULO DE AUTENTICACION / JWT                │
-               │                                                           │
-               │   UserEntity (tabla: users)                               │
-               │     ├── id (BIGINT PK)                                    │
-               │     ├── username (VARCHAR)                                │
-               │     ├── email (VARCHAR UNIQUE)                            │
-               │     ├── password_hash (VARCHAR - BCrypt)                  │
-               │     ├── role (VARCHAR - USER / ADMIN)                     │
-               │     └── created_at (TIMESTAMP)                            │
-               └───────────────────────────────────────────────────────────┘
-
-               ┌───────────────────────────────────────────────────────────┐
-               │                MODULO DE MODELADO BPMN                    │
-               │                                                           │
-               │   Empresa                                                 │
-               │     ├── Usuario (tabla: usuarios, RolAcceso)              │
-               │     └── Proceso (tabla: procesos)                         │
-               │           └── Pool (tabla: pools)                         │
-               │                 ├── Lane (tabla: lanes)                   │
-               │                 ├── NodoFlujo (tabla: nodos_flujo)        │
-               │                 │     ├── Actividad (tipo: ACTIVIDAD)     │
-               │                 │     └── Gateway (tipo: GATEWAY)         │
-               │                 ├── Arco (tabla: arcos)                   │
-               │                 └── Mensaje (tabla: mensajes)             │
-               │                       └── Correlacion                     │
-               └───────────────────────────────────────────────────────────┘
+```bash
+cp .env.example .env
 ```
 
-> **Nota:** `UserEntity` (tabla `users`) se encarga de la seguridad y el JWT, mientras que `Usuario` (tabla `usuarios`) pertenece al contexto de modelado de procesos organizacionales. Ambas coexisten sin conflictos.
-
----
-
-## 3. Flujo de Seguridad y Autenticacion
-
-1. **Registro:**
-   - La contraseña es encriptada usando `BCryptPasswordEncoder` (con salt aleatorio por cada contraseña).
-   - Se valida formato de email y longitud minima de contraseña (minimo 8 caracteres).
-   - Si el email ya esta registrado, retorna `409 Conflict`.
-   - **Nunca** se almacena ni se expone la contraseña o el hash en las respuestas.
-
-2. **Login y Generacion de JWT:**
-   - Se validan las credenciales con `PasswordEncoder.matches()`.
-   - En caso de error, retorna un generico `401 Unauthorized` (evita enumeracion de usuarios).
-   - Si es exitoso, `JwtService` genera un token firmado con algoritmo **HMAC-SHA256** a partir de una clave secreta (`JWT_SECRET`).
-   - El token contiene claims: `sub` (userId), `email`, `username`, `role`, `iat`, `exp`.
-
-3. **Filtro de Seguridad (`JwtAuthenticationFilter`):**
-   - Intercepta cada peticion entrante buscando el encabezado `Authorization: Bearer <token>`.
-   - Valida la firma y la fecha de expiracion del token.
-   - Establece la identidad y los roles (`ROLE_USER`, `ROLE_ADMIN`) en el `SecurityContextHolder`.
-
----
-
-## 4. Perfiles de Configuracion
-
-El proyecto cuenta con 3 perfiles preparados segun la necesidad:
-
-| Perfil | Base de Datos | Archivo | Uso Principal |
-|---|---|---|---|
-| **Default** | **PostgreSQL** | `application.properties` | Entorno estandar / produccion con PostgreSQL en `localhost:5432/bizagi2`. |
-| **`dev`** | **H2 en Memoria** | `application-dev.properties` | Desarrollo local sin necesidad de instalar PostgreSQL. Incluye consola H2 en `/h2-console`. |
-| **`test`** | **H2 en Memoria** | `application-test.properties` | Ejecucion de pruebas automatizadas aisladas (`mvn test`). |
-
----
-
-## 5. Base de Datos H2 en Memoria (Perfil `dev`)
-
-Cuando aun **no tengas PostgreSQL instalado o corriendo**, utiliza el perfil **`dev`** para ejecutar la aplicacion completamente funcional en memoria:
-
-### Credenciales y Conexion H2 por Defecto:
-
-| Parametro | Valor |
-|---|---|
-| **Consola Web H2** | http://localhost:8080/h2-console |
-| **Driver Class** | `org.h2.Driver` |
-| **JDBC URL** | `jdbc:h2:mem:bizagi2` |
-| **User Name** | `sa` |
-| **Password** | *(dejar vacio / sin contraseña)* |
-
-> **Nota:** Al entrar a `http://localhost:8080/h2-console`, asegurate de que el campo **JDBC URL** sea exactamente `jdbc:h2:mem:bizagi2`, deja la contraseña vacia y haz clic en **Connect** para inspeccionar las tablas (`users`, `procesos`, `nodos_flujo`, etc.) y hacer consultas SQL directamente.
-
----
-
-## 6. Guia de Ejecucion
-
-### Requisitos Previos
-- **Java:** JDK 21 o superior (ej. JDK 25).
-- **Maven:** Incluido en el proyecto mediante el wrapper `./mvnw` / `mvnw.cmd`.
-
----
-
-### A. Ejecutar en IntelliJ IDEA con H2 (Perfil `dev`)
-
-Para que la aplicacion corra con **H2** directamente desde **IntelliJ IDEA**:
-
-1. En el menu superior de IntelliJ, ve a **Run** -> **Edit Configurations...** (o haz clic en el desplegable junto al boton de Play).
-2. Selecciona tu configuracion de **`Bizagi2Application`** (bajo *Spring Boot* o *Application*).
-3. Configura el perfil `dev` de **cualquiera de estas formas**:
-   - **Forma 1 (Active profiles):** Si ves el campo *Active profiles*, escribe: `dev`
-   - **Forma 2 (Program arguments):** Escribe: `--spring.profiles.active=dev`
-   - **Forma 3 (VM options):** Escribe: `-Dspring.profiles.active=dev`
-4. Haz clic en **Apply** y luego en **OK**.
-5. Presiona **Run (Play)**.
-
-La aplicacion levantara inmediatamente en `http://localhost:8080` usando H2, sin requerir PostgreSQL.
-
----
-
-### B. Ejecutar por Terminal con H2 (Perfil `dev`)
-
-```powershell
-# En PowerShell (Windows)
-$env:JAVA_HOME = "C:\Users\Jonatan\.jdks\openjdk-25"
-$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
-.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+```properties
+DB_USERNAME=postgres
+DB_PASSWORD=tu_password_de_postgres
+JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres
 ```
 
----
+Si falta el `.env`, la app no arranca y el error indica la variable que no se pudo resolver (por ejemplo `Could not resolve placeholder 'JWT_SECRET'`).
 
-### C. Ejecutar las Pruebas Automatizadas (16 tests)
-Todas las pruebas se ejecutan automaticamente en memoria con H2:
+## Ejecutar
 
-```powershell
-.\mvnw.cmd test
-```
+Con PostgreSQL (crear la base una sola vez):
 
-Resultado:
-```text
-[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
-[INFO] BUILD SUCCESS
-```
-
----
-
-### D. Iniciar con PostgreSQL (Perfil Default)
-
-Cuando ya tengas PostgreSQL instalado y creado la base de datos:
 ```sql
 CREATE DATABASE bizagi2;
 ```
 
-Variables de entorno configurables (o toma los valores por defecto):
-```properties
-DATABASE_URL=jdbc:postgresql://localhost:5432/bizagi2
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=javeriana
-JWT_SECRET=tu-clave-secreta-de-al-menos-32-caracteres
-JWT_EXPIRATION=3600000
+```bash
+./mvnw spring-boot:run
 ```
 
-Ejecutas normalmente sin ningun perfil adicional:
-```powershell
-.\mvnw.cmd spring-boot:run
+Hibernate crea las tablas automaticamente (`ddl-auto=update`).
+
+Sin PostgreSQL, con H2 en memoria (no necesita `.env`):
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
----
+La consola H2 queda en `http://localhost:8080/h2-console` con JDBC URL `jdbc:h2:mem:bizagi2`, usuario `sa` y contrasena vacia.
 
-## 7. Documentacion Swagger / OpenAPI 3
+Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`.
 
-Con la aplicacion iniciada, accede a Swagger UI en el navegador:
+## Roles de acceso
 
-- **http://localhost:8080/swagger-ui.html**
-- **http://localhost:8080/swagger-ui/index.html**
+| Rol | Puede |
+|---|---|
+| ADMINISTRADOR | Todo, incluida la gestion de usuarios y los datos de la empresa |
+| EDITOR | Consultar y modificar procesos y todo su diagrama |
+| LECTOR | Solo consultar |
 
-### Como autenticarse en Swagger UI:
-1. Registra o haz login en `/api/auth/login` y copia el campo `token`.
-2. Haz clic en el boton **Authorize** (arriba a la derecha).
-3. En el campo `bearerAuth`, escribe: `Bearer <tu_token_aqui>`.
-4. Haz clic en **Authorize** y luego **Close**. Ahora podras probar los endpoints protegidos.
+## Endpoints
 
----
+Todos requieren el header `Authorization: Bearer <token>`, salvo `/api/auth/*`.
 
-## 8. Catalogo de Endpoints de Autenticacion
+| Recurso | Rutas |
+|---|---|
+| Autenticacion | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| Empresa | `GET /api/empresa`, `PUT /api/empresa` |
+| Usuarios (solo ADMINISTRADOR, salvo `/me`) | `GET /api/usuarios/me`, `GET/POST /api/usuarios`, `GET/PUT/DELETE /api/usuarios/{id}` (DELETE desactiva), `PUT /api/usuarios/{id}/activar` |
+| Procesos | `GET /api/procesos?nombre=&estado=&categoria=&activo=&page=&size=`, `POST /api/procesos`, `GET/PUT/DELETE /api/procesos/{id}`, `GET /api/procesos/{id}/diagrama`, `GET /api/procesos/{id}/historial`, `GET /api/procesos/{id}/validacion` |
+| Compartir procesos (HU-23) | `GET/POST /api/procesos/{id}/compartir` (POST solo ADMINISTRADOR, body `{"nit": "..."}`), `DELETE /api/procesos/{id}/compartir/{empresaId}`, `GET /api/procesos/compartidos` |
+| Roles de proceso (de la empresa) | `GET /api/roles-proceso?nombre=&page=&size=`, `POST /api/roles-proceso` (solo ADMINISTRADOR), `GET/PUT/DELETE /api/roles-proceso/{id}`, `GET /api/roles-proceso/{id}/historial` |
+| Pools | `GET/POST /api/procesos/{procesoId}/pools`, `GET/PUT/DELETE /api/pools/{id}` |
+| Lanes | `GET/POST /api/pools/{poolId}/lanes`, `PUT /api/pools/{poolId}/lanes/orden` (body: lista de ids), `GET /api/pools/{poolId}/roles-disponibles`, `GET/PUT/DELETE /api/lanes/{id}` |
+| Actividades | `GET /api/pools/{poolId}/actividades`, `POST /api/lanes/{laneId}/actividades`, `GET/PUT/DELETE /api/actividades/{id}` |
+| Gateways | `GET/POST /api/pools/{poolId}/gateways`, `GET/PUT/DELETE /api/gateways/{id}` |
+| Eventos | `GET/POST /api/pools/{poolId}/eventos`, `GET/PUT/DELETE /api/eventos/{id}` |
+| Arcos | `GET/POST /api/pools/{poolId}/arcos`, `GET/PUT/DELETE /api/arcos/{id}` |
+| Mensajes | `GET/POST /api/procesos/{procesoId}/mensajes`, `GET/PUT/DELETE /api/mensajes/{id}` |
+| Correlacion | `GET/POST/PUT/DELETE /api/mensajes/{mensajeId}/correlacion` |
 
-### 1. Registro de Usuario
-- **Ruta:** `POST /api/auth/register`
-- **Acceso:** Publico
-- **Headers:** `Content-Type: application/json`
+Las eliminaciones de actividades, gateways, eventos y arcos responden `200` con
+`{ arcosEliminados, mensajesEliminados, advertencias }` (las advertencias son las de `/validacion`).
 
-**Request Body:**
-```json
-{
-  "username": "jonatan",
-  "email": "jonatan@example.com",
-  "password": "PasswordSeguro123"
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "userId": 1,
-  "username": "jonatan",
-  "email": "jonatan@example.com",
-  "role": "USER"
-}
-```
-
----
-
-### 2. Inicio de Sesion (Login)
-- **Ruta:** `POST /api/auth/login`
-- **Acceso:** Publico
-- **Headers:** `Content-Type: application/json`
-
-**Request Body:**
-```json
-{
-  "email": "jonatan@example.com",
-  "password": "PasswordSeguro123"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJqb25hdGFuQGV4YW1wbGUuY29tIiwidXNlcm5hbWUiOiJqb25hdGFuIiwicm9sZSI6IlVTRVIiLCJpYXQiOjE3NDAwMDAwMDAsImV4cCI6MTc0MDAwMzYwMH0...",
-  "userId": 1,
-  "username": "jonatan",
-  "role": "USER"
-}
-```
-
----
-
-### 3. Obtener Usuario Autenticado
-- **Ruta:** `GET /api/users/me`
-- **Acceso:** Requiere Autenticacion (Bearer JWT)
-- **Headers:** `Authorization: Bearer <TOKEN>`
-
-**Response (200 OK):**
-```json
-{
-  "principal": "jonatan@example.com",
-  "authorities": [
-    "ROLE_USER"
-  ]
-}
-```
-
----
-
-## 9. Formato Estandar de Errores (`GlobalExceptionHandler`)
-
-Todas las respuestas de error siguen una estructura JSON homogenea:
+### Registro y login
 
 ```json
-{
-  "status": 401,
-  "message": "Invalid credentials",
-  "timestamp": "2026-09-01T20:45:00.000Z"
-}
+POST /api/auth/register
+{ "nombreEmpresa": "Acme SAS", "nit": "900123456", "emailContacto": "contacto@acme.com",
+  "nombre": "Ana Perez", "email": "ana@acme.com", "password": "Clave12345" }
+
+POST /api/auth/login
+{ "email": "ana@acme.com", "password": "Clave12345" }
 ```
 
-Codigos gestionados:
-- **`400 Bad Request`**: Errores de validacion de campos (`@Valid`).
-- **`401 Unauthorized`**: Credenciales invalidas o token inexistente/vencido.
-- **`403 Forbidden`**: Sin permisos suficientes para el recurso.
-- **`409 Conflict`**: Correo electronico duplicado en registro.
-- **`500 Internal Server Error`**: Excepciones no controladas.
+Ambos responden con el `token` y los datos del usuario. El registro crea la empresa y su administrador inicial (todos los campos son obligatorios y el NIT es unico); los demas usuarios los crea el administrador con `POST /api/usuarios` indicando su correo, su contrasena inicial y su rol.
+
+`POST /api/auth/logout` (con el token en el header) cierra la sesion: el token deja de servir y tambien los demas tokens que el usuario tuviera abiertos.
+
+### Ejemplos de cuerpos
+
+```json
+POST /api/procesos                 { "nombre": "Aprobacion de credito", "descripcion": "...", "categoria": "Finanzas" }
+POST /api/procesos/1/roles         { "nombre": "Analista" }
+POST /api/procesos/1/pools         { "nombre": "Acme", "tipoParticipante": "EMPRESA_PROPIETARIA" }
+POST /api/pools/1/lanes            { "nombre": "Analisis" }
+POST /api/lanes/1/actividades      { "nombre": "Revisar solicitud", "rolProceso": { "id": 1 } }
+POST /api/pools/1/gateways         { "nombre": "Aprobado?", "tipoGateway": "EXCLUSIVA" }
+POST /api/pools/1/arcos            { "origen": { "id": 1 }, "destino": { "id": 2 } }
+POST /api/procesos/1/mensajes      { "nombre": "Solicitud", "origen": { "id": 3 }, "destino": { "id": 1 } }
+POST /api/mensajes/1/correlacion   { "criterio": "numero de solicitud" }
+```
+
+Valores validos: `tipoParticipante` = `EMPRESA_PROPIETARIA | CLIENTE | PROVEEDOR | SISTEMA_EXTERNO`; `tipoGateway` = `EXCLUSIVA | PARALELA | INCLUSIVA`; `estado` = `BORRADOR | PUBLICADO`; `rolAcceso` = `ADMINISTRADOR | EDITOR | LECTOR`.
+
+## Reglas de negocio (en los servicios)
+
+- Multitenancy: todo se consulta por la empresa del token; un recurso de otra empresa responde `404`.
+- Borrado logico en todo el diagrama (procesos, pools, lanes, actividades, gateways, eventos, arcos, mensajes, roles): el registro pasa a `activo = false` y deja de verse en las consultas normales.
+- Eliminar (salvo pools y lanes): solo ADMINISTRADOR. Pools y lanes: los elimina quien tenga permiso de estructura (HU-24).
+- Historial general: cada cambio queda con usuario, fecha, accion, entidad y detalle. `GET /api/procesos/{id}/historial` trae los del proceso y su diagrama; `GET /api/roles-proceso/{id}/historial` los del rol.
+- Roles de proceso: son de la empresa (no de un proceso), nombre unico por empresa, solo el ADMINISTRADOR los crea. No se elimina uno que alguna lane use (el `409` dice en que procesos).
+- Lane: pertenece a un pool y tiene un rol de proceso. La actividad no tiene rol propio: su responsable es el de su lane. No se elimina una lane con actividades.
+- Permiso de estructura (HU-24): `PUT /api/empresa` con `editorModificaEstructura` decide si el EDITOR puede crear, editar y eliminar pools y lanes. El ADMINISTRADOR siempre puede y el LECTOR nunca.
+- Pool de participante externo (CLIENTE, PROVEEDOR, SISTEMA_EXTERNO): caja negra, no admite lanes ni elementos. Un pool solo se elimina si esta vacio y sin mensajes dirigidos a el.
+- Actividad: requiere `nombre` y `tipo`; el nombre es unico dentro del proceso.
+- Arcos: unen elementos del mismo pool (entre pools se usa un mensaje), sin duplicados ni bucles. La `condicion` solo existe si el arco sale de un gateway exclusivo o inclusivo; al pasar un gateway a PARALELA se borran las condiciones de sus arcos salientes. Un Message Catch de inicio no admite arcos entrantes.
+- Mensajes: salen de un evento `MENSAJE_LANZAMIENTO` o una actividad `ENVIO` hacia otro pool. Si el destino es un `SISTEMA_EXTERNO` requieren `tipoDestino`. La clave de correlacion (`criterio` y `accionSinCaso`) se define por mensaje.
+- Validacion (`GET /api/procesos/{id}/validacion`): devuelve `ERROR` y `ADVERTENCIA`. Los errores (gateway sin dos salientes, arco de gateway sin condicion, Catch de inicio con arcos entrantes) impiden pasar el proceso a `PUBLICADO`; en `BORRADOR` se puede trabajar incompleto. Las advertencias (elementos desconectados, mensaje sin receptor, clave de correlacion ausente o distinta, mensajes ambiguos) solo avisan.
+- Compartir (HU-23): solo el ADMINISTRADOR, por NIT de la empresa invitada, en solo lectura. La invitada ve el proceso y su diagrama sin los roles de la propietaria y no ve el historial.
+- Un proceso eliminado se puede consultar pero no admite cambios (`409`).
+
+## Formato de errores
+
+```json
+{ "status": 404, "message": "Proceso no encontrado", "timestamp": "2026-09-28T03:10:35Z" }
+```
+
+`400` datos invalidos o regla de negocio, `401` sin token o credenciales invalidas, `403` sin permiso para la accion, `404` no existe (o es de otra empresa), `409` duplicado o elemento en uso.
+
+## Si ya tenias la base de datos creada con una version anterior
+
+El modelo cambio bastante (roles de proceso por empresa, lane con rol, eventos, mensajes hacia un pool, historial general), y `ddl-auto=update` no elimina ni cambia columnas viejas. Lo mas simple en desarrollo es recrear la base:
+
+```sql
+DROP DATABASE bizagi2;
+CREATE DATABASE bizagi2;
+```
+
+La tabla `historial_procesos` de la version anterior ya no se usa (ahora es `historial`).
