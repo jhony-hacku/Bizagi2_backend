@@ -1,128 +1,177 @@
-# =============================================================================
-# ARCHIVO DE REFERENCIA DEL PROFESOR - NO MODIFICAR
-# Este workflow fue proporcionado por el profesor como plantilla de referencia.
-# Está comentado para que no se ejecute; el workflow activo es build.yml
-# =============================================================================
-#
-# name: CI - Build and Test
-#
-# on:
-#   push:
-#     branches: [main, develop, entrega-1-backend]
-#   pull_request:
-#     branches: [main, develop]
-#
-# jobs:
-#   build-and-test:
-#     name: Build & Test (${{ matrix.os }})
-#     runs-on: ${{ matrix.os }}
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         os: [ubuntu-latest, windows-latest]
-#
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-#
-#       - name: Setup JDK 21
-#         uses: actions/setup-java@v4
-#         with:
-#           java-version: '21'
-#           distribution: 'temurin'
-#           cache: maven
-#
-#       - name: Build and verify
-#         run: mvn -B clean verify
-#
-#       - name: Upload test results
-#         if: always()
-#         uses: dorny/test-reporter@v1
-#         with:
-#           name: Test Results (${{ matrix.os }})
-#           path: target/surefire-reports/*.xml
-#           reporter: java-junit
-#           fail-on-error: false
-#
-#       - name: Upload JaCoCo coverage report
-#         if: matrix.os == 'ubuntu-latest'
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: jacoco-report
-#           path: target/site/jacoco/
-#           retention-days: 7
-#
-#       - name: Verify JAR exists
-#         shell: bash
-#         run: ls -la target/*.jar
-#
-#   architecture-guard:
-#     name: Architecture Rules
-#     runs-on: ubuntu-latest
-#     needs: build-and-test
-#
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-#
-#       - name: Setup JDK 21
-#         uses: actions/setup-java@v4
-#         with:
-#           java-version: '21'
-#           distribution: 'temurin'
-#           cache: maven
-#
-#       - name: Run ArchUnit tests
-#         run: mvn -B test -Dtest="com.facimus.procesos.arquitectura.**" -Dsurefire.failIfNoSpecifiedTests=false
-#
-#       - name: Architecture tests summary
-#         if: always()
-#         uses: dorny/test-reporter@v1
-#         with:
-#           name: Architecture Rules
-#           path: target/surefire-reports/*.xml
-#           reporter: java-junit
-#           fail-on-error: true
-#
-#   docker-build:
-#     name: Docker Image
-#     runs-on: ubuntu-latest
-#     needs: [build-and-test, architecture-guard]
-#
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-#
-#       - name: Build Docker image
-#         run: docker build -t facimus/procesos-back:${{ github.sha }} .
-#
-#       - name: Verify image runs
-#         run: |
-#           docker run -d --name test-container -p 8080:8080 facimus/procesos-back:${{ github.sha }}
-#           sleep 10
-#           docker logs test-container
-#           docker stop test-container
-#
-#   sonarcloud:
-#     name: SonarCloud Analysis
-#     runs-on: ubuntu-latest
-#     needs: build-and-test
-#     if: github.event_name == 'push'
-#
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0  # Necesario para análisis de blame y nuevas líneas
-#
-#       - name: Setup JDK 25
-#         uses: actions/setup-java@v4
-#         with:
-#           java-version: '25'
-#           distribution: 'temurin'
-#           cache: maven
-#
-#       - name: Build, test & analyze with SonarCloud
-#         env:
-#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-#         run: mvn -B verify sonar:sonar -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+name: CI - Build, Test & Sonar
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Si haces push seguido, cancela la ejecucion anterior de la misma rama
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write   # necesario para que dorny/test-reporter publique el resultado
+
+jobs:
+  build-test-sonar:
+    name: Build, Test & Sonar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    steps:
+      - name: Checkout (historial completo para Sonar)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      # Una sola compilacion: tests + JaCoCo + JAR
+      - name: Build, tests y cobertura
+        run: mvn -B clean verify
+
+      - name: Resultado de tests
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Test Results
+          path: target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Guardar reporte JaCoCo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 7
+
+      - name: Verificar que el JAR existe
+        run: ls -la target/*.jar
+
+      # Reutiliza target/ del paso anterior (no vuelve a compilar).
+      # El token se lee de la variable SONAR_TOKEN, no se pasa por linea de comandos.
+      # qualitygate.wait: el workflow falla si el Quality Gate no pasa.
+      - name: Analisis SonarCloud
+        if: ${{ env.SONAR_TOKEN != '' }}
+        run: mvn -B sonar:sonar -Dsonar.qualitygate.wait=true
+
+  docker-build:
+    name: Docker Image & Smoke Test
+    runs-on: ubuntu-latest
+    needs: build-test-sonar
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build de la imagen
+        run: docker build -t bizagi2-backend:${{ github.sha }} .
+
+      # Smoke test con PostgreSQL 17 y flujo completo de autenticacion
+      - name: Smoke test con PostgreSQL y flujo Auth E2E
+        run: |
+          docker network create test-net
+          docker run -d --name db --network test-net \
+            -e POSTGRES_DB=bizagi2 -e POSTGRES_USER=bizagi -e POSTGRES_PASSWORD=test \
+            postgres:17
+          until docker exec db pg_isready -U bizagi -d bizagi2; do sleep 2; done
+          sleep 5
+
+          docker run -d --name app --network test-net -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e DB_URL=jdbc:postgresql://db:5432/bizagi2 \
+            -e DB_USER=bizagi \
+            -e DB_PASSWORD=test \
+            -e DDL_AUTO=update \
+            -e JWT_SECRET=ci-secret-ci-secret-ci-secret-ci-secret-1234 \
+            bizagi2-backend:${{ github.sha }}
+
+          echo "Esperando que la aplicacion arranque..."
+          READY=0
+          for i in $(seq 1 40); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/swagger-ui.html | grep -q "200\|302"; then
+              echo "La aplicacion arranco correctamente"
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "La aplicacion no arranco a tiempo"
+            docker logs app
+            docker logs db
+            exit 1
+          fi
+
+          echo "=== 1. Registrar empresa y administrador (HU-01) ==="
+          REG_RESP=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "nombreEmpresa": "Acme CI Corp",
+              "nit": "900123456-1",
+              "emailContacto": "contacto@acmeci.com",
+              "nombre": "Admin CI",
+              "email": "admin@acmeci.com",
+              "password": "ClaveSegura123"
+            }')
+          REG_CODE=$(echo "$REG_RESP" | tail -n1)
+          REG_BODY=$(echo "$REG_RESP" | sed '$d')
+          echo "Status: $REG_CODE"
+          echo "Body: $REG_BODY"
+          if [ "$REG_CODE" != "201" ]; then
+            echo "Fallo el registro en smoke test"
+            docker logs app
+            exit 1
+          fi
+
+          echo "=== 2. Iniciar sesion y obtener token JWT (HU-03) ==="
+          LOGIN_RESP=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "email": "admin@acmeci.com",
+              "password": "ClaveSegura123"
+            }')
+          LOGIN_CODE=$(echo "$LOGIN_RESP" | tail -n1)
+          LOGIN_BODY=$(echo "$LOGIN_RESP" | sed '$d')
+          echo "Status: $LOGIN_CODE"
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "Fallo login en smoke test"
+            docker logs app
+            exit 1
+          fi
+
+          TOKEN=$(echo "$LOGIN_BODY" | jq -r '.token')
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "No se obtuvo token valido"
+            exit 1
+          fi
+
+          echo "=== 3. Consultar endpoint protegido con JWT ==="
+          ME_RESP=$(curl -s -w "\n%{http_code}" -X GET http://localhost:8080/api/usuarios/me \
+            -H "Authorization: Bearer $TOKEN")
+          ME_CODE=$(echo "$ME_RESP" | tail -n1)
+          ME_BODY=$(echo "$ME_RESP" | sed '$d')
+          echo "Status: $ME_CODE"
+          echo "Body: $ME_BODY"
+          if [ "$ME_CODE" != "200" ]; then
+            echo "Fallo endpoint protegido en smoke test"
+            docker logs app
+            exit 1
+          fi
+
+          echo "=== Smoke Test E2E completado con exito ==="

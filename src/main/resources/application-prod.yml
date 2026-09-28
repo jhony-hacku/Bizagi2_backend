@@ -1,0 +1,33 @@
+# ==============================================================================
+# PERFIL PROD (Producción / Contenedores Docker / Kubernetes)
+# Lee todas las credenciales y parámetros de conexión desde variables de entorno.
+# ==============================================================================
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # Por defecto 'validate' para máxima seguridad en producción (falla si el esquema no coincide).
+      # En CI / smoke tests se sobreescribe con DDL_AUTO=update.
+      ddl-auto: ${DDL_AUTO:validate}
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
+  h2:
+    console:
+      enabled: false
+
+# Configuración JWT requerida por JwtService (@Value("${jwt.secret}") y @Value("${jwt.expiration-ms}"))
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+# Documentación OpenAPI / Swagger en producción
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}

@@ -1,0 +1,26 @@
+# Secretos y credenciales locales: nunca deben entrar a la imagen
+.env
+.env.*
+.env*
+*.env
+
+# Salidas de compilación y empaquetado local
+target/
+*.log
+
+# Control de versiones y CI
+.git/
+.github/
+
+# Configuración de entornos de desarrollo (IDEs)
+.idea/
+.vscode/
+*.iml
+
+# Documentación no necesaria en el build del contenedor
+*.md
+.gitattributes
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
