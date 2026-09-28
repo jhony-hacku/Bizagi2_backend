@@ -1,277 +1,167 @@
 # Bizagi2 Backend
 
-Sistema de gestion y modelado de procesos de negocio BPMN 2.0 multiempresa (visor y editor de procesos). Desarrollado con Spring Boot 4.1.1, Java 25, JPA / Hibernate, PostgreSQL 17, seguridad JWT (HMAC-SHA), analisis estatico con SonarCloud y cobertura automatizada con JaCoCo.
+Sistema de gestion de procesos multiempresa (visor y editor de procesos). Spring Boot 4.1.1, Java 25, JPA/Hibernate, PostgreSQL y autenticacion con JWT.
 
-Cada empresa se registra de forma independiente con su administrador inicial, gestiona colaboradores con diferentes roles y modela sus diagramas (pools, lanes, actividades, gateways, arcos de secuencia, mensajes y correlaciones). El aislamiento de datos (multitenancy) garantiza que la informacion de una empresa nunca sea visible para otra.
+Cada empresa se registra con su administrador, crea colaboradores con distintos roles y modela sus procesos como un diagrama (pools, lanes, actividades, gateways, arcos, mensajes y correlaciones). La informacion de una empresa nunca es visible para otra.
 
----
-
-## Arquitectura y Estructura
-
-El backend implementa una arquitectura en capas desacoplada (`Controller -> Service -> Repository -> Database`):
+## Estructura
 
 ```text
 src/main/java/desarrollo/web/Bizagi2/
-  ├── Bizagi2Application.java   # Clase de arranque Spring Boot
-  ├── controller/               # Endpoints REST (HTTP, validacion de entrada y serializacion)
-  ├── service/                  # Reglas de negocio BPMN, transacciones y aislamiento multitenant
-  ├── repository/               # Repositorios Spring Data JPA
-  ├── entities/                 # Entidades JPA, enums y modelo de dominio
-  ├── exception/                # Excepciones de dominio y GlobalExceptionHandler (@RestControllerAdvice)
-  └── security/                 # Filtro JWT, servicio de tokens y configuracion de seguridad
+  entities/     Entidades JPA y enums (el modelo de la base de datos)
+  repository/   Repositorios Spring Data JPA (uno por tabla)
+  service/      Reglas de negocio y transacciones (uno por entidad)
+  controller/   Endpoints REST: solo interpretan HTTP y llaman al servicio
+  exception/    Excepciones de dominio y GlobalExceptionHandler
+  security/     JWT, filtro de autenticacion y reglas por rol
 ```
 
-Flujo de peticion: `Controller -> Service -> Repository -> Base de datos`. El controlador nunca interactua directamente con los repositorios; los servicios resuelven las asociaciones, validan permisos y aplican las reglas del modelador BPMN.
+Flujo de una peticion: `controller -> service -> repository -> base de datos`. El controlador no toca el repositorio; el servicio aplica las reglas y resuelve las asociaciones.
 
----
+## Configuracion
 
-## Requisitos y Configuracion del Entorno
-
-El proyecto requiere **Java 25** y **Maven 3.9+** (gestionado via Maven Wrapper `./mvnw` o `mvnw.cmd`).
-
-### Opcion A: Linux (Ubuntu / Debian)
+Las credenciales van en un archivo `.env` en la raiz del proyecto (esta en `.gitignore`, no se sube al repo). Copia la plantilla y ajusta los valores:
 
 ```bash
-# Dependencias base
-sudo apt update && sudo apt install -y curl git postgresql docker.io
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-
-# Instalacion de Java 25 recomendada via SDKMAN:
-curl -s "https://get.sdkman.io" | bash
-source "$HOME/.sdkman/bin/sdkman-init.sh"
-sdk install java 25-temurin
+cp .env.example .env
 ```
 
-### Opcion B: Linux (Arch Linux)
+```properties
+DB_USERNAME=postgres
+DB_PASSWORD=tu_password_de_postgres
+JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres
+```
+
+Si falta el `.env`, la app no arranca y el error indica la variable que no se pudo resolver (por ejemplo `Could not resolve placeholder 'JWT_SECRET'`).
+
+## Ejecutar
+
+Con PostgreSQL (crear la base una sola vez):
+
+```sql
+CREATE DATABASE bizagi2;
+```
 
 ```bash
-# Dependencias base
-sudo pacman -Syu
-sudo pacman -S jdk-openjdk maven docker postgresql
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-
-# Para configurar la version activa de Java:
-archlinux-java status
-sudo archlinux-java set <nombre-mostrado-en-status>   # ej. java-25-openjdk
-
-# O alternativamente via SDKMAN:
-# sdk install java 25-temurin
+./mvnw spring-boot:run
 ```
 
-### Opcion C: Windows (PowerShell)
+Hibernate crea las tablas automaticamente (`ddl-auto=update`).
 
-1. Descargar e instalar OpenJDK 25 (por ejemplo Eclipse Temurin 25 o Microsoft OpenJDK 25).
-2. Configurar la variable de entorno `JAVA_HOME` en PowerShell antes de ejecutar comandos:
-   ```powershell
-   $env:JAVA_HOME="C:\Ruta\A\Tu\jdk-25"
-   ```
-3. Ejecutar los comandos utilizando el script wrapper `.\mvnw.cmd`.
-
----
-
-## Perfiles de Configuracion
-
-El sistema cuenta con configuraciones desacopladas para cada escenario:
-
-| Perfil | Archivo | Proposito |
-| :--- | :--- | :--- |
-| **dev** | `src/main/resources/application-dev.properties` | Base H2 en memoria para desarrollo rapido local sin PostgreSQL ni `.env`. Consola web en `/h2-console`. |
-| **prod** | `src/main/resources/application-prod.yml` | Produccion, Docker y Kubernetes: 100% parametrizado mediante variables de entorno, sin valores fijos. |
-| **test** | `src/test/resources/application-test.properties` | Entorno de pruebas unitarias y de integracion automatizadas con H2 en memoria. |
-| *(default)* | `src/main/resources/application.properties` | Configuracion local con PostgreSQL que lee credenciales desde `.env`. |
-
-### Variables de Entorno del Perfil `prod`
-
-El perfil `application-prod.yml` lee los siguientes parametros:
+Sin PostgreSQL, con H2 en memoria (no necesita `.env`):
 
 ```bash
-DB_URL=jdbc:postgresql://<host>:<puerto>/<base_datos>
-DB_USER=<usuario_postgres>
-DB_PASSWORD=<password_postgres>
-JWT_SECRET=<clave_secreta_minimo_32_caracteres>
-DDL_AUTO=validate            # Por defecto 'validate' por seguridad. Usar 'update' solo en arranque inicial o CI.
-JWT_EXPIRATION_MS=86400000   # Opcional, por defecto 24 horas (86400000 ms)
-SWAGGER_ENABLED=true         # Opcional, true/false
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
----
+La consola H2 queda en `http://localhost:8080/h2-console` con JDBC URL `jdbc:h2:mem:bizagi2`, usuario `sa` y contrasena vacia.
 
-## Modos de Ejecucion
+Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`.
 
-Asegurate de que el wrapper tenga permisos de ejecucion en Linux:
-```bash
-chmod +x ./mvnw
+## Roles de acceso
+
+| Rol | Puede |
+|---|---|
+| ADMINISTRADOR | Todo, incluida la gestion de usuarios y los datos de la empresa |
+| EDITOR | Consultar y modificar procesos y todo su diagrama |
+| LECTOR | Solo consultar |
+
+## Endpoints
+
+Todos requieren el header `Authorization: Bearer <token>`, salvo `/api/auth/*`.
+
+| Recurso | Rutas |
+|---|---|
+| Autenticacion | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| Empresa | `GET /api/empresa`, `PUT /api/empresa` |
+| Usuarios (solo ADMINISTRADOR, salvo `/me`) | `GET /api/usuarios/me`, `GET/POST /api/usuarios`, `GET/PUT/DELETE /api/usuarios/{id}` (DELETE desactiva), `PUT /api/usuarios/{id}/activar` |
+| Procesos | `GET /api/procesos?nombre=&estado=&categoria=&activo=&page=&size=`, `POST /api/procesos`, `GET/PUT/DELETE /api/procesos/{id}`, `GET /api/procesos/{id}/diagrama`, `GET /api/procesos/{id}/historial`, `GET /api/procesos/{id}/validacion` |
+| Compartir procesos (HU-23) | `GET/POST /api/procesos/{id}/compartir` (POST solo ADMINISTRADOR, body `{"nit": "..."}`), `DELETE /api/procesos/{id}/compartir/{empresaId}`, `GET /api/procesos/compartidos` |
+| Roles de proceso (de la empresa) | `GET /api/roles-proceso?nombre=&page=&size=`, `POST /api/roles-proceso` (solo ADMINISTRADOR), `GET/PUT/DELETE /api/roles-proceso/{id}`, `GET /api/roles-proceso/{id}/historial` |
+| Pools | `GET/POST /api/procesos/{procesoId}/pools`, `GET/PUT/DELETE /api/pools/{id}` |
+| Lanes | `GET/POST /api/pools/{poolId}/lanes`, `PUT /api/pools/{poolId}/lanes/orden` (body: lista de ids), `GET /api/pools/{poolId}/roles-disponibles`, `GET/PUT/DELETE /api/lanes/{id}` |
+| Actividades | `GET /api/pools/{poolId}/actividades`, `POST /api/lanes/{laneId}/actividades`, `GET/PUT/DELETE /api/actividades/{id}` |
+| Gateways | `GET/POST /api/pools/{poolId}/gateways`, `GET/PUT/DELETE /api/gateways/{id}` |
+| Eventos | `GET/POST /api/pools/{poolId}/eventos`, `GET/PUT/DELETE /api/eventos/{id}` |
+| Arcos | `GET/POST /api/pools/{poolId}/arcos`, `GET/PUT/DELETE /api/arcos/{id}` |
+| Mensajes | `GET/POST /api/procesos/{procesoId}/mensajes`, `GET/PUT/DELETE /api/mensajes/{id}` |
+| Correlacion | `GET/POST/PUT/DELETE /api/mensajes/{mensajeId}/correlacion` |
+
+Las eliminaciones de actividades, gateways, eventos y arcos responden `200` con
+`{ arcosEliminados, mensajesEliminados, advertencias }` (las advertencias son las de `/validacion`).
+
+### Registro y login
+
+```json
+POST /api/auth/register
+{ "nombreEmpresa": "Acme SAS", "nit": "900123456", "emailContacto": "contacto@acme.com",
+  "nombre": "Ana Perez", "email": "ana@acme.com", "password": "Clave12345" }
+
+POST /api/auth/login
+{ "email": "ana@acme.com", "password": "Clave12345" }
 ```
 
-### 1. Modo Desarrollo Rapido (Perfil `dev`)
-No requiere base de datos externa ni `.env`:
+Ambos responden con el `token` y los datos del usuario. El registro crea la empresa y su administrador inicial (todos los campos son obligatorios y el NIT es unico); los demas usuarios los crea el administrador con `POST /api/usuarios` indicando su correo, su contrasena inicial y su rol.
 
-- En Linux:
-  ```bash
-  ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-  ```
-- En Windows (PowerShell):
-  ```powershell
-  .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
-  ```
+`POST /api/auth/logout` (con el token en el header) cierra la sesion: el token deja de servir y tambien los demas tokens que el usuario tuviera abiertos.
 
-- Consola H2: `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:mem:bizagi2`, Usuario: `sa`, Contrasena vacia).
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
+### Ejemplos de cuerpos
 
-### 2. Modo Produccion (Perfil `prod`)
-Requiere definir las variables de entorno:
-
-- En Linux:
-  ```bash
-  export DB_URL=jdbc:postgresql://localhost:5432/bizagi2
-  export DB_USER=bizagi
-  export DB_PASSWORD=test
-  export JWT_SECRET=clave-secreta-super-larga-y-segura-de-mas-de-32-bytes
-  export DDL_AUTO=update
-  ./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
-  ```
-- En Windows (PowerShell):
-  ```powershell
-  $env:DB_URL="jdbc:postgresql://localhost:5432/bizagi2"
-  $env:DB_USER="bizagi"
-  $env:DB_PASSWORD="test"
-  $env:JWT_SECRET="clave-secreta-super-larga-y-segura-de-mas-de-32-bytes"
-  $env:DDL_AUTO="update"
-  .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=prod
-  ```
-
----
-
-## Docker y Smoke Testing
-
-El archivo `Dockerfile` implementa una construccion multi-etapa:
-- **Build stage:** `eclipse-temurin:25-jdk` descarga dependencias y empaqueta el JAR con `./mvnw clean package -DskipTests`.
-- **Runtime stage:** `eclipse-temurin:25-jre` ejecuta el contenedor bajo un usuario sin privilegios (`appuser`, UID 1001).
-
-### Construir la imagen localmente
-```bash
-docker build -t bizagi2-backend .
+```json
+POST /api/procesos                    { "nombre": "Aprobacion de credito", "descripcion": "...", "categoria": "Finanzas" }
+POST /api/roles-proceso               { "nombre": "Analista", "descripcion": "Analiza solicitudes" }
+POST /api/procesos/1/pools            { "nombre": "Cliente", "tipoParticipante": "CLIENTE" }
+POST /api/pools/1/lanes               { "rolProceso": { "id": 1 } }            (nombre opcional: por defecto el del rol)
+POST /api/lanes/1/actividades         { "nombre": "Revisar solicitud", "tipo": "USUARIO", "posicionX": 10, "posicionY": 20 }
+PUT  /api/actividades/1               { "nombre": "Revisar", "tipo": "MANUAL", "lane": { "id": 2 } }
+POST /api/pools/1/gateways            { "nombre": "Aprobado?", "tipoGateway": "EXCLUSIVA" }
+PUT  /api/gateways/1                  { "nombre": "Aprobado?", "tipoGateway": "PARALELA" }     (el PUT lleva el cuerpo completo)
+POST /api/pools/1/eventos             { "nombre": "Inicio", "tipoEvento": "INICIO" }
+POST /api/pools/1/arcos               { "origen": { "id": 1 }, "destino": { "id": 2 }, "etiqueta": "si", "condicion": "monto <= 1000000" }
+POST /api/procesos/1/mensajes         { "nombre": "Aviso", "origen": { "id": 3 }, "destinoPool": { "id": 4 }, "tipoDestino": "CORREO" }
+POST /api/mensajes/1/correlacion      { "criterio": "numero de radicado", "accionSinCaso": "DESCARTAR" }
+PUT  /api/empresa                     { "nombre": "Acme", "nit": "900111", "emailContacto": "c@acme.com", "editorModificaEstructura": false }
+POST /api/procesos/1/compartir        { "nit": "800222" }
 ```
 
-### Ejecutar Smoke Test con PostgreSQL 17 (Identico al CI)
-Prueba que valida la imagen Docker, la creacion de esquemas en PostgreSQL y el flujo completo de autenticacion:
+Valores validos: `tipoParticipante` = `EMPRESA_PROPIETARIA | CLIENTE | PROVEEDOR | SISTEMA_EXTERNO`; `tipoActividad` (campo `tipo`) = `TAREA | USUARIO | MANUAL | SERVICIO | ENVIO`; `tipoGateway` = `EXCLUSIVA | PARALELA | INCLUSIVA`; `tipoEvento` = `INICIO | FIN | MENSAJE_LANZAMIENTO | MENSAJE_RECEPCION_INICIO | MENSAJE_RECEPCION_INTERMEDIO`; `tipoDestino` = `CORREO | SERVICIO_WEB | COLA`; `accionFallo` = `CONTINUAR_FLUJO | DERIVAR_A_MANEJO_ERROR | FINALIZAR_PROCESO`; `accionSinCaso` = `DESCARTAR | INICIAR_CASO_NUEVO`; `estado` = `BORRADOR | PUBLICADO`; `rolAcceso` = `ADMINISTRADOR | EDITOR | LECTOR`.
 
-```bash
-# 1. Crear red de prueba
-docker network create test-net
+Obligatorios: actividad (`nombre`, `tipo`), gateway (`nombre`, `tipoGateway`), evento (`nombre`, `tipoEvento`), mensaje (`nombre`, `origen.id`, `destinoPool.id`, y `tipoDestino` si el destino es un `SISTEMA_EXTERNO`), correlacion (`criterio`, `accionSinCaso`), lane (`rolProceso.id`). Los `PUT` llevan el cuerpo completo, no solo el campo que cambia.
 
-# 2. Iniciar PostgreSQL 17
-docker run -d --name db --network test-net \
-  -e POSTGRES_DB=bizagi2 -e POSTGRES_USER=bizagi -e POSTGRES_PASSWORD=test \
-  postgres:17
+Respuestas: los `DELETE` responden `204` sin cuerpo, salvo actividades, gateways, eventos y arcos, que responden `200` con `{ arcosEliminados, mensajesEliminados, advertencias }`. Para comprobar un borrado logico se consulta el recurso y se ve `activo: false` (procesos, usuarios) o `404` (elementos del diagrama y roles). `GET /api/procesos/{id}/validacion` devuelve una lista de `{ nivel, elemento, elementoId, mensaje }` con `nivel` = `ERROR | ADVERTENCIA`.
 
-# 3. Esperar que la base de datos este lista
-until docker exec db pg_isready -U bizagi -d bizagi2; do sleep 2; done
-sleep 3
+## Reglas de negocio (en los servicios)
 
-# 4. Iniciar contenedor de la aplicacion
-docker run -d --name app --network test-net -p 8080:8080 \
-  -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:postgresql://db:5432/bizagi2 \
-  -e DB_USER=bizagi \
-  -e DB_PASSWORD=test \
-  -e DDL_AUTO=update \
-  -e JWT_SECRET=ci-secret-ci-secret-ci-secret-ci-secret-1234 \
-  bizagi2-backend
+- Multitenancy: todo se consulta por la empresa del token; un recurso de otra empresa responde `404`.
+- Borrado logico en todo el diagrama (procesos, pools, lanes, actividades, gateways, eventos, arcos, mensajes, roles): el registro pasa a `activo = false` y deja de verse en las consultas normales.
+- Eliminar (salvo pools y lanes): solo ADMINISTRADOR. Pools y lanes: los elimina quien tenga permiso de estructura (HU-24).
+- Historial general: cada cambio queda con usuario, fecha, accion, entidad y detalle. `GET /api/procesos/{id}/historial` trae los del proceso y su diagrama; `GET /api/roles-proceso/{id}/historial` los del rol.
+- Roles de proceso: son de la empresa (no de un proceso), nombre unico por empresa, solo el ADMINISTRADOR los crea. No se elimina uno que alguna lane use (el `409` dice en que procesos).
+- Lane: pertenece a un pool y tiene un rol de proceso. La actividad no tiene rol propio: su responsable es el de su lane. No se elimina una lane con actividades.
+- Permiso de estructura (HU-24): `PUT /api/empresa` con `editorModificaEstructura` decide si el EDITOR puede crear, editar y eliminar pools y lanes. El ADMINISTRADOR siempre puede y el LECTOR nunca.
+- Pool de participante externo (CLIENTE, PROVEEDOR, SISTEMA_EXTERNO): caja negra, no admite lanes ni elementos. Un pool solo se elimina si esta vacio y sin mensajes dirigidos a el.
+- Actividad: requiere `nombre` y `tipo`; el nombre es unico dentro del proceso.
+- Arcos: unen elementos del mismo pool (entre pools se usa un mensaje), sin duplicados ni bucles. La `condicion` solo existe si el arco sale de un gateway exclusivo o inclusivo; al pasar un gateway a PARALELA se borran las condiciones de sus arcos salientes. Un Message Catch de inicio no admite arcos entrantes.
+- Mensajes: salen de un evento `MENSAJE_LANZAMIENTO` o una actividad `ENVIO` hacia otro pool. Si el destino es un `SISTEMA_EXTERNO` requieren `tipoDestino`. La clave de correlacion (`criterio` y `accionSinCaso`) se define por mensaje.
+- Validacion (`GET /api/procesos/{id}/validacion`): devuelve `ERROR` y `ADVERTENCIA`. Los errores (gateway sin dos salientes, arco de gateway sin condicion, Catch de inicio con arcos entrantes) impiden pasar el proceso a `PUBLICADO`; en `BORRADOR` se puede trabajar incompleto. Las advertencias (elementos desconectados, mensaje sin receptor, clave de correlacion ausente o distinta, mensajes ambiguos) solo avisan.
+- Compartir (HU-23): solo el ADMINISTRADOR, por NIT de la empresa invitada, en solo lectura. La invitada ve el proceso y su diagrama sin los roles de la propietaria y no ve el historial.
+- Un proceso eliminado se puede consultar pero no admite cambios (`409`).
 
-# 5. Probar endpoints
-curl -s -X POST http://localhost:8080/api/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"nombreEmpresa":"Acme","nit":"900123456","emailContacto":"info@acme.com","nombre":"Admin","email":"admin@acme.com","password":"Clave12345"}'
+## Formato de errores
 
-# 6. Limpieza
-docker rm -f app db
-docker network rm test-net
+```json
+{ "status": 404, "message": "Proceso no encontrado", "timestamp": "2026-09-28T03:10:35Z" }
 ```
 
----
+`400` datos invalidos o regla de negocio, `401` sin token o credenciales invalidas, `403` sin permiso para la accion, `404` no existe (o es de otra empresa), `409` duplicado o elemento en uso.
 
-## Pruebas Unitarias, JaCoCo y SonarCloud
+## Si ya tenias la base de datos creada con una version anterior
 
-El proyecto cuenta con una suite automatizada de pruebas unitarias que cubre las Historias de Usuario (HU-01 a HU-28), las clases de servicio BPMN, seguridad y manejo de excepciones.
+El modelo cambio bastante (roles de proceso por empresa, lane con rol, eventos, mensajes hacia un pool, historial general), y `ddl-auto=update` no elimina ni cambia columnas viejas. Lo mas simple en desarrollo es recrear la base:
 
-### Ejecutar pruebas y reporte de cobertura
-- Linux:
-  ```bash
-  ./mvnw clean verify
-  ```
-- Windows:
-  ```powershell
-  .\mvnw.cmd clean verify
-  ```
+```sql
+DROP DATABASE bizagi2;
+CREATE DATABASE bizagi2;
+```
 
-El reporte HTML se genera en `target/site/jacoco/index.html`.
-
-### Exclusiones de Cobertura en pom.xml
-Para asegurar metricas de cobertura precisas, se sincronizaron las exclusiones en `<sonar.coverage.exclusions>` y en el plugin `jacoco-maven-plugin`:
-- **Excluidos:** `entities/**`, `dto/**`, `config/**`, `security/*Config.*`, `exception/*Exception.*` (POJOs simples que solo extienden `RuntimeException`) y `Bizagi2Application.*`.
-- **Incluido:** `GlobalExceptionHandler.java` (`@RestControllerAdvice` con logica de traduccion de codigos HTTP), cubierto exhaustivamente con pruebas unitarias.
-
----
-
-## Pipeline CI/CD en GitHub Actions (`.github/workflows/ci.yml`)
-
-El pipeline automatizado unificado se ejecuta en pushes y pull requests hacia `main` y `develop`:
-
-1. **Job `build-test-sonar`:**
-   - Compila con JDK 25 Temurin.
-   - Ejecuta `mvn -B clean verify` (compilacion, pruebas y reporte JaCoCo).
-   - Publica los resultados de pruebas mediante `dorny/test-reporter`.
-   - Preserva el reporte de JaCoCo como artefacto descargable.
-   - Ejecuta el analisis de SonarCloud exigiendo el cumplimiento del Quality Gate (`sonar.qualitygate.wait=true`).
-2. **Job `docker-build`:**
-   - Construye la imagen Docker `bizagi2-backend:${{ github.sha }}`.
-   - Despliega un contenedor efimero de PostgreSQL 17.
-   - Realiza un **Smoke Test E2E** ejecutando registro empresarial (HU-01), login (HU-03) y llamada a endpoints protegidos con JWT con validacion de codigos de respuesta HTTP.
-
----
-
-## Roles de Acceso
-
-| Rol | Descripcion de Privilegios |
-| :--- | :--- |
-| ADMINISTRADOR | Gestion total de la empresa, administracion de usuarios, edicion del diagrama y eliminacion de recursos. |
-| EDITOR | Creacion y modificacion de procesos, diagramas y elementos. La creacion y eliminacion de estructura (pools y lanes) depende de la configuracion empresarial `editorModificaEstructura` (HU-24). |
-| LECTOR | Consulta de diagramas y procesos en modo solo lectura. |
-
----
-
-## Resumen de Endpoints de la API
-
-Todos los endpoints requieren el header `Authorization: Bearer <token>`, excepto `/api/auth/*`.
-
-| Recurso | Rutas Principales |
-| :--- | :--- |
-| **Autenticacion** | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
-| **Empresa** | `GET /api/empresa`, `PUT /api/empresa` |
-| **Usuarios** | `GET /api/usuarios/me`, `GET /api/usuarios`, `POST /api/usuarios`, `PUT /api/usuarios/{id}`, `DELETE /api/usuarios/{id}`, `PUT /api/usuarios/{id}/activar` |
-| **Procesos** | `GET/POST /api/procesos`, `GET/PUT/DELETE /api/procesos/{id}`, `GET /api/procesos/{id}/diagrama`, `GET /api/procesos/{id}/historial`, `GET /api/procesos/{id}/validacion` |
-| **Compartir (HU-23)** | `GET/POST /api/procesos/{id}/compartir`, `DELETE /api/procesos/{id}/compartir/{empresaId}`, `GET /api/procesos/compartidos` |
-| **Roles de Proceso** | `GET/POST /api/roles-proceso`, `GET/PUT/DELETE /api/roles-proceso/{id}`, `GET /api/roles-proceso/{id}/historial` |
-| **Pools** | `GET/POST /api/procesos/{procesoId}/pools`, `GET/PUT/DELETE /api/pools/{id}` |
-| **Lanes** | `GET/POST /api/pools/{poolId}/lanes`, `PUT /api/pools/{poolId}/lanes/orden`, `GET /api/pools/{poolId}/roles-disponibles`, `GET/PUT/DELETE /api/lanes/{id}` |
-| **Actividades** | `GET /api/pools/{poolId}/actividades`, `POST /api/lanes/{laneId}/actividades`, `GET/PUT/DELETE /api/actividades/{id}` |
-| **Gateways** | `GET/POST /api/pools/{poolId}/gateways`, `GET/PUT/DELETE /api/gateways/{id}` |
-| **Eventos** | `GET/POST /api/pools/{poolId}/eventos`, `GET/PUT/DELETE /api/eventos/{id}` |
-| **Arcos** | `GET/POST /api/pools/{poolId}/arcos`, `GET/PUT/DELETE /api/arcos/{id}` |
-| **Mensajes** | `GET/POST /api/procesos/{procesoId}/mensajes`, `GET/PUT/DELETE /api/mensajes/{id}` |
-| **Correlacion** | `GET/POST/PUT/DELETE /api/mensajes/{mensajeId}/correlacion` |
-
----
-
-## Reglas de Negocio BPMN
-
-- **Multitenancy Estricto:** Toda peticion se filtra por la empresa del token; cualquier recurso de otra empresa responde `404 Not Found`.
-- **Borrado Logico:** Procesos y elementos del diagrama utilizan borrado logico (`activo = false`) para conservar integridad referencial e historial de auditoria.
-- **Participantes Externos:** Pools tipo `CLIENTE`, `PROVEEDOR` o `SISTEMA_EXTERNO` se consideran cajas negras (no admiten lanes ni elementos internos).
-- **Arcos vs Mensajes:** Los arcos de secuencia solo conectan nodos del mismo pool; la comunicacion inter-pool se realiza unicamente con mensajes.
-- **Validacion del Proceso (`/validacion`):**
-  - **Errores:** Bloquean el paso a `PUBLICADO` (gateways sin bifurcacion, arcos condicionales sin expresion de condicion, eventos Message Catch iniciales con arcos entrantes).
-  - **Advertencias:** Notificaciones sobre elementos huerfanos o mensajes sin receptor, permitidas mientras el proceso este en `BORRADOR`.
+La tabla `historial_procesos` de la version anterior ya no se usa (ahora es `historial`).
