@@ -15,6 +15,16 @@
 	<description>Sistema de gestion de procesos multiempresa</description>
 	<properties>
 		<java.version>25</java.version>
+
+		<!-- ===== SonarCloud ===== -->
+		<sonar.organization>jhony-hacku</sonar.organization>
+		<sonar.projectKey>jhony-hacku_Bizagi2_backend</sonar.projectKey>
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.java.source>25</sonar.java.source>
+		<!-- Rutas de cobertura generadas por JaCoCo -->
+		<sonar.coverage.jacoco.xmlReportPaths>
+			${project.build.directory}/site/jacoco/jacoco.xml
+		</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 	<dependencies>
 		<!-- Spring Web -->
@@ -128,6 +138,33 @@
 						</path>
 					</annotationProcessorPaths>
 				</configuration>
+			</plugin>
+
+			<!-- ===== JaCoCo: cobertura de código para SonarCloud ===== -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<executions>
+					<!-- Prepara el agente JaCoCo antes de los tests -->
+					<execution>
+						<id>prepare-agent</id>
+						<goals><goal>prepare-agent</goal></goals>
+					</execution>
+					<!-- Genera el reporte XML que consume SonarCloud -->
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals><goal>report</goal></goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- ===== Sonar Maven Plugin ===== -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>4.0.0.4121</version>
 			</plugin>
 		</plugins>
 	</build>

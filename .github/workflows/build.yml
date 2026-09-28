@@ -1,0 +1,48 @@
+name: "\U0001F52C SonarCloud - Verification Test"
+
+on:
+  workflow_dispatch: # Ejecucion manual desde la pestana Actions
+  push:
+    branches: ["**"] # Cualquier rama para facilitar la prueba
+
+jobs:
+  sonarcloud-test:
+    name: SonarCloud Integration Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout (con historial completo para blame)"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Setup JDK 25"
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: maven
+
+      - name: "Build + Tests + JaCoCo coverage"
+        run: mvn -B clean verify
+
+      - name: "Verificar reporte JaCoCo generado"
+        run: |
+          echo "=== Verificando reporte JaCoCo ==="
+          if [ -f target/site/jacoco/jacoco.xml ]; then
+            echo "OK: jacoco.xml encontrado"
+            wc -l target/site/jacoco/jacoco.xml
+          else
+            echo "AVISO: jacoco.xml NO encontrado (no hay tests con cobertura aun)"
+            ls -la target/site/ 2>/dev/null || echo "target/site/ no existe"
+          fi
+
+      - name: "Analisis SonarCloud"
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn -B sonar:sonar -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+
+      - name: "Mostrar propiedades Sonar activas del pom"
+        run: |
+          echo "=== Propiedades Sonar activas ==="
+          mvn -B help:effective-pom | grep -A1 "sonar\." | head -40
