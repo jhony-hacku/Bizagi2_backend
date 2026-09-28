@@ -58,6 +58,29 @@ La consola H2 queda en `http://localhost:8080/h2-console` con JDBC URL `jdbc:h2:
 
 Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`.
 
+### Ejecutar con Docker
+
+Docker Compose levanta Spring Boot y PostgreSQL conectados, y conserva los datos de PostgreSQL en un volumen:
+
+```bash
+docker compose up --build -d
+```
+
+La API queda disponible en `http://localhost:8080` y Swagger en `http://localhost:8080/swagger-ui.html`. PostgreSQL queda publicado en `localhost:5432`.
+
+Para detener los servicios:
+
+```bash
+docker compose down
+```
+
+Si el puerto `8080` ya esta ocupado, ejecuta la aplicacion en otro puerto:
+
+```powershell
+$env:APP_PORT="8081"
+docker compose up --build -d
+```
+
 ## Roles de acceso
 
 | Rol | Puede |

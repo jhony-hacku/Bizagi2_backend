@@ -7,6 +7,7 @@
 # Salidas de compilación y empaquetado local
 target/
 *.log
+docker-compose.override.yml
 
 # Control de versiones y CI
 .git/
@@ -20,6 +21,7 @@ target/
 # Documentación no necesaria en el build del contenedor
 *.md
 .gitattributes
+postman/
 
 # Sistema operativo
 .DS_Store

@@ -4,11 +4,9 @@ WORKDIR /app
 
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
-# Si el repo se clono en Windows, mvnw puede perder el permiso de ejecucion
 RUN chmod +x mvnw && ./mvnw -B dependency:go-offline
 
 COPY src src
-# Los tests ya se corren en el CI, aqui solo se empaqueta
 RUN ./mvnw -B clean package -DskipTests
 
 # ---------- Etapa 2: imagen final (solo JRE) ----------
