@@ -38,7 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = jwtService.leerClaims(header.substring(7));
                 Integer usuarioId = Integer.valueOf(claims.getSubject());
                 Integer version = claims.get("v", Integer.class);
-                Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+                Usuario usuario = usuarioRepository.findConEmpresaById(usuarioId).orElse(null);
                 if (usuario != null && usuario.isActivo() && version != null
                         && version == usuario.getVersionSesion()) {
                     var autenticacion = new UsernamePasswordAuthenticationToken(

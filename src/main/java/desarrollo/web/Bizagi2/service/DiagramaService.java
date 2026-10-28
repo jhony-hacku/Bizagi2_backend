@@ -2,6 +2,8 @@ package desarrollo.web.Bizagi2.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ import desarrollo.web.Bizagi2.entities.Evento;
 import desarrollo.web.Bizagi2.entities.Gateway;
 import desarrollo.web.Bizagi2.entities.Lane;
 import desarrollo.web.Bizagi2.entities.Mensaje;
+import desarrollo.web.Bizagi2.entities.NodoFlujo;
 import desarrollo.web.Bizagi2.entities.Pool;
 import desarrollo.web.Bizagi2.entities.Proceso;
 import desarrollo.web.Bizagi2.repository.ArcoRepository;
@@ -97,9 +100,13 @@ public class DiagramaService {
                 poolId);
     }
 
+    private Set<Integer> idsDe(Set<Actividad> actividades) {
+        return actividades.stream().map(NodoFlujo::getId).collect(Collectors.toSet());
+    }
+
     private EventoResponse evento(Evento e, Integer poolId) {
         return new EventoResponse(e.getId(), e.getNombre(), e.getTipoEvento(), e.getPosicionX(), e.getPosicionY(),
-                e.getContenido(), e.getOrigenExterno(), e.getClaveCorrelacion(), e.getActividadesUsuarias(),
+                e.getContenido(), e.getOrigenExterno(), e.getClaveCorrelacion(), idsDe(e.getActividadesUsuarias()),
                 poolId);
     }
 

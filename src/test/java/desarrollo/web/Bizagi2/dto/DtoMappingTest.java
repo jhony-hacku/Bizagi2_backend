@@ -320,7 +320,7 @@ class DtoMappingTest {
         evento.setContenido("monto:numero");
         evento.setOrigenExterno(true);
         evento.setClaveCorrelacion("radicado");
-        evento.setActividadesUsuarias(Set.of(100, 101));
+        evento.setActividadesUsuarias(referencias(100, 101));
         evento.setPool(pool(20, "Acme"));
 
         EventoResponse dto = modelMapper.map(evento, EventoResponse.class);
@@ -333,7 +333,7 @@ class DtoMappingTest {
         Evento entidad = modelMapper.map(new EventoRequest("Inicio", TipoEvento.INICIO, null, null, null, null, null,
                 Set.of(7)), Evento.class);
         assertThat(entidad.getTipoEvento()).isEqualTo(TipoEvento.INICIO);
-        assertThat(entidad.getActividadesUsuarias()).containsExactly(7);
+        assertThat(entidad.getActividadesUsuarias()).extracting(Actividad::getId).containsExactly(7);
         assertThat(entidad.getId()).isNull();
     }
 
@@ -468,5 +468,16 @@ class DtoMappingTest {
         assertThat(dto.getFecha()).isEqualTo(Instant.parse("2026-10-27T12:00:00Z"));
         assertThat(dto.getUsuarioId()).isEqualTo(3);
         assertThat(dto.getUsuarioNombre()).isEqualTo("Ana");
+    }
+
+    // Referencias a actividades por id, como las que produce ModelMapper desde actividadesUsuarias del request
+    private static Set<Actividad> referencias(Integer... ids) {
+        Set<Actividad> actividades = new java.util.HashSet<>();
+        for (Integer id : ids) {
+            Actividad actividad = new Actividad();
+            actividad.setId(id);
+            actividades.add(actividad);
+        }
+        return actividades;
     }
 }

@@ -210,3 +210,27 @@ Si solo quieres conservar los datos actuales, la columna nueva de HU-26 (activid
 ```sql
 ALTER TABLE mensajes ADD COLUMN actividad_error_id INTEGER REFERENCES nodos_flujo(id);
 ```
+
+Las entidades usan control de concurrencia optimista (`@Version`) y dos restricciones de unicidad nuevas. En una base existente con `validate` se agregan asi:
+
+```sql
+-- Columna de version (@Version) en las entidades editables
+ALTER TABLE empresas ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE procesos ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE pools ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE lanes ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE roles_proceso ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE nodos_flujo ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE arcos ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE mensajes ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE correlaciones ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+
+-- Un NIT por empresa y una correlacion por mensaje
+ALTER TABLE empresas ADD CONSTRAINT uk_empresas_nit UNIQUE (nit);
+ALTER TABLE correlaciones ADD CONSTRAINT uk_correlaciones_mensaje UNIQUE (mensaje_id);
+ALTER TABLE procesos_compartidos ADD CONSTRAINT uk_proceso_compartido_empresa UNIQUE (proceso_id, empresa_id);
+
+-- actividadesUsuarias de un evento ahora es @ManyToMany: la tabla intermedia gana su FK hacia la actividad
+ALTER TABLE evento_actividades_usuarias ADD CONSTRAINT fk_evento_actividad FOREIGN KEY (actividad_id) REFERENCES nodos_flujo(id);
+```
