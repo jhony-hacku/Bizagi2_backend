@@ -7,12 +7,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.proceso.HistorialResponse;
+import desarrollo.web.Bizagi2.dto.rol.ProcesoResumenResponse;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoDetalleResponse;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoRequest;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Historial;
 import desarrollo.web.Bizagi2.entities.Lane;
@@ -38,10 +44,11 @@ public class RolProcesoService {
     private final LaneRepository laneRepository;
     private final EmpresaService empresaService;
     private final HistorialService historialService;
+    private final ModelMapper modelMapper;
 
     // HU-20: lista paginada con busqueda por nombre, procesos donde se usa y si se puede eliminar
     @Transactional(readOnly = true)
-    public Page<Map<String, Object>> listar(Integer empresaId, String nombre, int pagina, int tamano) {
+    public Page<RolProcesoDetalleResponse> listar(Integer empresaId, String nombre, int pagina, int tamano) {
         if (pagina < 0 || tamano < 1 || tamano > TAMANO_MAXIMO) {
             throw new ReglaNegocioException(
                     "Paginacion invalida: page debe ser >= 0 y size entre 1 y " + TAMANO_MAXIMO);
@@ -51,7 +58,7 @@ public class RolProcesoService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> detalle(Integer id, Integer empresaId) {
+    public RolProcesoDetalleResponse detalle(Integer id, Integer empresaId) {
         return conUso(buscarPorId(id, empresaId));
     }
 
@@ -127,23 +134,13 @@ public class RolProcesoService {
         return historialService.deEntidad("ROL", id);
     }
 
-    private Map<String, Object> conUso(RolProceso rol) {
+    // HU-20: el rol con los procesos donde se usa y si se puede eliminar
+    private RolProcesoDetalleResponse conUso(RolProceso rol) {
         Map<Integer, String> procesos = procesosDondeSeUsa(rol);
-        List<Map<String, Object>> lista = new ArrayList<>();
-        procesos.forEach((pid, nombre) -> {
-            Map<String, Object> p = new LinkedHashMap<>();
-            p.put("id", pid);
-            p.put("nombre", nombre);
-            lista.add(p);
-        });
-        Map<String, Object> fila = new LinkedHashMap<>();
-        fila.put("id", rol.getId());
-        fila.put("nombre", rol.getNombre());
-        fila.put("descripcion", rol.getDescripcion());
-        fila.put("enUso", !procesos.isEmpty());
-        fila.put("eliminable", procesos.isEmpty());
-        fila.put("procesos", lista);
-        return fila;
+        List<ProcesoResumenResponse> lista = new ArrayList<>();
+        procesos.forEach((pid, nombre) -> lista.add(new ProcesoResumenResponse(pid, nombre)));
+        return new RolProcesoDetalleResponse(rol.getId(), rol.getNombre(), rol.getDescripcion(),
+                !procesos.isEmpty(), procesos.isEmpty(), lista);
     }
 
     private List<String> nombresDeProcesos(RolProceso rol) {
@@ -157,5 +154,29 @@ public class RolProcesoService {
             procesos.putIfAbsent(proceso.getId(), proceso.getNombre());
         }
         return procesos;
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+
+    public RolProcesoResponse aResponse(RolProceso rol) {
+        return modelMapper.map(rol, RolProcesoResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RolProcesoResponse> disponiblesDto(Integer empresaId) {
+        return disponibles(empresaId).stream().map(this::aResponse).toList();
+    }
+
+    public RolProcesoResponse crear(Usuario usuario, RolProcesoRequest datos) {
+        return aResponse(crear(usuario, modelMapper.map(datos, RolProceso.class)));
+    }
+
+    public RolProcesoResponse actualizar(Integer id, Usuario usuario, RolProcesoRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, RolProceso.class)));
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistorialResponse> historialDto(Integer id, Integer empresaId) {
+        return historial(id, empresaId).stream().map(h -> modelMapper.map(h, HistorialResponse.class)).toList();
     }
 }

@@ -13,7 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -27,6 +26,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.proceso.AdvertenciaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Arco;
@@ -564,7 +565,7 @@ class NodoFlujoServiceTest {
         arco.setId(201);
         arco.setActivo(true);
 
-        Map<String, Object> esperado = Map.of("advertencias", List.of());
+        EliminacionResponse esperado = new EliminacionResponse(1, 0, List.of());
 
         when(nodoFlujoRepository.findById(100)).thenReturn(Optional.of(actividad));
         when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
@@ -572,7 +573,7 @@ class NodoFlujoServiceTest {
         when(mensajeRepository.findByOrigenId(100)).thenReturn(List.of());
         when(validacionService.resultadoEliminacion(proceso, 1, 0)).thenReturn(esperado);
 
-        Map<String, Object> resultado = nodoFlujoService.eliminarActividad(100, usuario);
+        EliminacionResponse resultado = nodoFlujoService.eliminarActividad(100, usuario);
 
         assertThat(resultado).isSameAs(esperado);
         assertThat(actividad.isActivo()).isFalse();
@@ -686,7 +687,7 @@ class NodoFlujoServiceTest {
         Gateway gateway = enMiPool(new Gateway(), 300);
         gateway.setNombre("Gateway");
         gateway.setActivo(true);
-        Map<String, Object> esperado = Map.of("advertencias", List.of());
+        EliminacionResponse esperado = new EliminacionResponse(1, 0, List.of());
 
         when(nodoFlujoRepository.findById(300)).thenReturn(Optional.of(gateway));
         when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
@@ -694,7 +695,7 @@ class NodoFlujoServiceTest {
         when(mensajeRepository.findByOrigenId(300)).thenReturn(List.of());
         when(validacionService.resultadoEliminacion(proceso, 0, 0)).thenReturn(esperado);
 
-        Map<String, Object> resultado = nodoFlujoService.eliminarGateway(300, usuario);
+        EliminacionResponse resultado = nodoFlujoService.eliminarGateway(300, usuario);
 
         assertThat(resultado).isSameAs(esperado);
         assertThat(gateway.isActivo()).isFalse();
@@ -1008,7 +1009,8 @@ class NodoFlujoServiceTest {
         mensaje.setNombre("Factura");
         mensaje.setActivo(true);
 
-        Map<String, Object> esperado = Map.of("advertencias", List.of("aviso"));
+        EliminacionResponse esperado = new EliminacionResponse(1, 1,
+                List.of(new AdvertenciaResponse("ADVERTENCIA", "EVENTO", 400, "aviso")));
 
         when(nodoFlujoRepository.findById(400)).thenReturn(Optional.of(evento));
         when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
@@ -1016,7 +1018,7 @@ class NodoFlujoServiceTest {
         when(mensajeRepository.findByOrigenId(400)).thenReturn(List.of(mensaje));
         when(validacionService.resultadoEliminacion(proceso, 1, 1)).thenReturn(esperado);
 
-        Map<String, Object> resultado = nodoFlujoService.eliminarEvento(400, usuario);
+        EliminacionResponse resultado = nodoFlujoService.eliminarEvento(400, usuario);
 
         assertThat(resultado).isSameAs(esperado);
         assertThat(evento.isActivo()).isFalse();
@@ -1047,4 +1049,4 @@ class NodoFlujoServiceTest {
         verify(nodoFlujoRepository, never()).save(any());
         verify(arcoRepository, never()).save(any());
     }
-}
+}

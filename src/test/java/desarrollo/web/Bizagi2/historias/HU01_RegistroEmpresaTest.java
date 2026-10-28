@@ -7,9 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +16,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -108,21 +108,21 @@ class HU01_RegistroEmpresaTest {
         when(usuarioService.crear(eq(10), any(Usuario.class))).thenReturn(adminGuardado);
         when(jwtService.generarToken(adminGuardado)).thenReturn("mocked-jwt-token");
 
-        Map<String, String> datos = new HashMap<>();
-        datos.put("nombreEmpresa", "Tech Corp");
-        datos.put("nit", "900999888-2");
-        datos.put("emailContacto", "info@techcorp.com");
-        datos.put("nombre", "Juan Perez");
-        datos.put("email", "admin@techcorp.com");
-        datos.put("password", "SecurePass123");
+        RegistroRequest datos = new RegistroRequest();
+        datos.setNombreEmpresa("Tech Corp");
+        datos.setNit("900999888-2");
+        datos.setEmailContacto("info@techcorp.com");
+        datos.setNombre("Juan Perez");
+        datos.setEmail("admin@techcorp.com");
+        datos.setPassword("SecurePass123");
 
-        Map<String, Object> respuesta = authService.registrar(datos);
+        AuthResponse respuesta = authService.registrar(datos);
 
         assertThat(respuesta).isNotNull();
-        assertThat(respuesta.get("token")).isEqualTo("mocked-jwt-token");
-        assertThat(respuesta.get("usuarioId")).isEqualTo(100);
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.ADMINISTRADOR);
-        assertThat(respuesta.get("empresaId")).isEqualTo(10);
+        assertThat(respuesta.getToken()).isEqualTo("mocked-jwt-token");
+        assertThat(respuesta.getUsuarioId()).isEqualTo(100);
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
+        assertThat(respuesta.getEmpresaId()).isEqualTo(10);
 
         ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
         verify(usuarioService).crear(eq(10), captor.capture());

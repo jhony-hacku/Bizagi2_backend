@@ -4,10 +4,13 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.List;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.pool.PoolRequest;
+import desarrollo.web.Bizagi2.dto.pool.PoolResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Pool;
 import desarrollo.web.Bizagi2.entities.Proceso;
@@ -34,6 +37,7 @@ public class PoolService {
     private final MensajeRepository mensajeRepository;
     private final ProcesoService procesoService;
     private final HistorialService historialService;
+    private final ModelMapper modelMapper;
 
     @Transactional(readOnly = true)
     public List<Pool> listarPorProceso(Integer procesoId, Integer empresaId) {
@@ -120,5 +124,29 @@ public class PoolService {
         poolRepository.save(pool);
         historialService.registrar(usuario, pool.getProceso(), AccionHistorial.ELIMINAR, "POOL", id,
                 "Pool '" + pool.getNombre() + "' eliminado");
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+
+    public PoolResponse aResponse(Pool pool) {
+        return modelMapper.map(pool, PoolResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PoolResponse> listarPorProcesoDto(Integer procesoId, Integer empresaId) {
+        return listarPorProceso(procesoId, empresaId).stream().map(this::aResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PoolResponse buscarPorIdDto(Integer id, Integer empresaId) {
+        return aResponse(buscarPorId(id, empresaId));
+    }
+
+    public PoolResponse crear(Integer procesoId, Usuario usuario, PoolRequest datos) {
+        return aResponse(crear(procesoId, usuario, modelMapper.map(datos, Pool.class)));
+    }
+
+    public PoolResponse actualizar(Integer id, Usuario usuario, PoolRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, Pool.class)));
     }
 }

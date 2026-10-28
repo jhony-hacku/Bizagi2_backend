@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +14,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.diagrama.DiagramaLaneResponse;
+import desarrollo.web.Bizagi2.dto.diagrama.DiagramaResponse;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Arco;
 import desarrollo.web.Bizagi2.entities.Empresa;
@@ -139,12 +140,14 @@ class DiagramaServiceTest {
         when(arcoRepository.findByPoolId(20)).thenReturn(List.of(arco));
         when(mensajeRepository.findByProcesoId(10)).thenReturn(List.of());
 
-        Map<String, Object> diagrama = diagramaService.obtener(10, 1);
+        DiagramaResponse diagrama = diagramaService.obtener(10, 1);
 
         assertThat(diagrama).isNotNull();
-        assertThat(diagrama.get("proceso")).isNotNull();
-        List<?> pools = (List<?>) diagrama.get("pools");
-        assertThat(pools).hasSize(1);
+        assertThat(diagrama.getProceso()).isNotNull();
+        assertThat(diagrama.getProceso().isPropio()).isTrue();
+        assertThat(diagrama.getPools()).hasSize(1);
+        assertThat(diagrama.getPools().get(0).getGateways()).hasSize(1);
+        assertThat(diagrama.getPools().get(0).getEventos()).hasSize(1);
     }
 
     @Test
@@ -163,10 +166,11 @@ class DiagramaServiceTest {
         when(arcoRepository.findByPoolId(20)).thenReturn(List.of());
         when(mensajeRepository.findByProcesoId(10)).thenReturn(List.of());
 
-        Map<String, Object> diagrama = diagramaService.obtener(10, 1);
+        DiagramaResponse diagrama = diagramaService.obtener(10, 1);
 
-        List<Map<String, Object>> pools = (List<Map<String, Object>>) diagrama.get("pools");
-        List<Map<String, Object>> lanes = (List<Map<String, Object>>) pools.get(0).get("lanes");
-        assertThat(lanes.get(0).containsKey("rolProcesoId")).isFalse();
+        DiagramaLaneResponse lane = diagrama.getPools().get(0).getLanes().get(0);
+        assertThat(lane.getRolProcesoId()).isNull();
+        assertThat(lane.getRolProceso()).isNull();
+        assertThat(diagrama.getProceso().isPropio()).isFalse();
     }
 }

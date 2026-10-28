@@ -4,9 +4,13 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.List;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.mensaje.MensajeRequest;
+import desarrollo.web.Bizagi2.dto.mensaje.MensajeResponse;
+import desarrollo.web.Bizagi2.entities.AccionFallo;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Evento;
@@ -35,6 +39,7 @@ public class MensajeService {
     private final PoolService poolService;
     private final NodoFlujoService nodoFlujoService;
     private final HistorialService historialService;
+    private final ModelMapper modelMapper;
 
     @Transactional(readOnly = true)
     public List<Mensaje> listarPorProceso(Integer procesoId, Integer empresaId) {
@@ -67,7 +72,7 @@ public class MensajeService {
         mensaje.setOrigen(origen);
         mensaje.setDestinoPool(destino);
         mensaje.setNombre(datos.getNombre().trim());
-        copiarDatosDeEnvio(mensaje, datos, destino);
+        copiarDatosDeEnvio(mensaje, datos, destino, proceso, empresaId);
         mensaje.setActivo(true);
         mensaje = mensajeRepository.save(mensaje);
         historialService.registrar(usuario, proceso, AccionHistorial.CREAR, "MENSAJE", mensaje.getId(),
@@ -87,7 +92,7 @@ public class MensajeService {
         mensaje.setOrigen(origen);
         mensaje.setDestinoPool(destino);
         mensaje.setNombre(datos.getNombre().trim());
-        copiarDatosDeEnvio(mensaje, datos, destino);
+        copiarDatosDeEnvio(mensaje, datos, destino, proceso, empresaId);
         mensaje = mensajeRepository.save(mensaje);
         historialService.registrar(usuario, proceso, AccionHistorial.EDITAR, "MENSAJE", id,
                 "Mensaje '" + mensaje.getNombre() + "' modificado");
@@ -144,11 +149,51 @@ public class MensajeService {
         }
     }
 
-    private void copiarDatosDeEnvio(Mensaje mensaje, Mensaje datos, Pool destino) {
+    private void copiarDatosDeEnvio(Mensaje mensaje, Mensaje datos, Pool destino, Proceso proceso, Integer empresaId) {
         mensaje.setContenido(datos.getContenido());
         boolean externo = destino.getTipoParticipante() == TipoParticipante.SISTEMA_EXTERNO;
         mensaje.setTipoDestino(externo ? datos.getTipoDestino() : null);
         mensaje.setMomento(externo ? datos.getMomento() : null);
         mensaje.setAccionFallo(externo ? datos.getAccionFallo() : null);
+        mensaje.setActividadError(externo && datos.getAccionFallo() == AccionFallo.DERIVAR_A_MANEJO_ERROR
+                ? actividadDeError(datos, proceso, empresaId) : null);
+    }
+
+    // HU-26: si la notificacion falla y se deriva, se indica la actividad de manejo de error (del mismo proceso)
+    private Actividad actividadDeError(Mensaje datos, Proceso proceso, Integer empresaId) {
+        if (datos.getActividadError() == null || datos.getActividadError().getId() == null) {
+            throw new ReglaNegocioException(
+                    "Con accionFallo DERIVAR_A_MANEJO_ERROR se debe indicar la actividad de error (actividadErrorId)");
+        }
+        Actividad actividad = nodoFlujoService.buscarActividad(datos.getActividadError().getId(), empresaId);
+        if (!actividad.getPool().getProceso().getId().equals(proceso.getId())) {
+            throw new ReglaNegocioException("La actividad de error debe pertenecer al proceso " + proceso.getId());
+        }
+        return actividad;
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+    // origenId / destinoPoolId del DTO llegan como mensaje.origen.id / mensaje.destinoPool.id
+
+    public MensajeResponse aResponse(Mensaje mensaje) {
+        return modelMapper.map(mensaje, MensajeResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MensajeResponse> listarPorProcesoDto(Integer procesoId, Integer empresaId) {
+        return listarPorProceso(procesoId, empresaId).stream().map(this::aResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public MensajeResponse buscarPorIdDto(Integer id, Integer empresaId) {
+        return aResponse(buscarPorId(id, empresaId));
+    }
+
+    public MensajeResponse crear(Integer procesoId, Usuario usuario, MensajeRequest datos) {
+        return aResponse(crear(procesoId, usuario, modelMapper.map(datos, Mensaje.class)));
+    }
+
+    public MensajeResponse actualizar(Integer id, Usuario usuario, MensajeRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, Mensaje.class)));
     }
 }

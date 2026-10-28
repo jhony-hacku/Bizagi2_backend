@@ -2,7 +2,6 @@ package desarrollo.web.Bizagi2.service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -10,6 +9,9 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.proceso.AdvertenciaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
+import desarrollo.web.Bizagi2.entities.AccionFallo;
 import desarrollo.web.Bizagi2.entities.Arco;
 import desarrollo.web.Bizagi2.entities.Correlacion;
 import desarrollo.web.Bizagi2.entities.Evento;
@@ -45,8 +47,8 @@ public class ValidacionService {
     private final MensajeRepository mensajeRepository;
     private final CorrelacionRepository correlacionRepository;
 
-    public List<Map<String, Object>> validar(Proceso proceso) {
-        List<Map<String, Object>> items = new ArrayList<>();
+    public List<AdvertenciaResponse> validar(Proceso proceso) {
+        List<AdvertenciaResponse> items = new ArrayList<>();
         List<Pool> pools = poolRepository.findByProcesoId(proceso.getId());
         List<Evento> recepciones = new ArrayList<>();
         Map<Integer, Integer> entrantesPorNodo = new HashMap<>();
@@ -85,6 +87,10 @@ public class ValidacionService {
 
                 if (nodo instanceof Gateway gateway) {
                     validarGateway(items, gateway, nEntrantes, misSalientes);
+                } else if (misSalientes.size() >= 2) {
+                    // HU-16: una ramificacion necesita un gateway como punto de decision
+                    items.add(item(ADVERTENCIA, tipo, nodo.getId(), "'" + nodo.getNombre() + "' se divide en "
+                            + misSalientes.size() + " caminos sin un gateway que funcione como punto de decision"));
                 }
                 if (nodo instanceof Evento evento) {
                     if (evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INICIO
@@ -103,23 +109,19 @@ public class ValidacionService {
     }
 
     // Respuesta de las eliminaciones de nodos y arcos: que se elimino y que advierte ahora el editor
-    public Map<String, Object> resultadoEliminacion(Proceso proceso, int arcosEliminados, int mensajesEliminados) {
-        Map<String, Object> resultado = new LinkedHashMap<>();
-        resultado.put("arcosEliminados", arcosEliminados);
-        resultado.put("mensajesEliminados", mensajesEliminados);
-        resultado.put("advertencias", validar(proceso));
-        return resultado;
+    public EliminacionResponse resultadoEliminacion(Proceso proceso, int arcosEliminados, int mensajesEliminados) {
+        return new EliminacionResponse(arcosEliminados, mensajesEliminados, validar(proceso));
     }
 
     // Solo los textos de los errores: lo usa el proceso al pasar a PUBLICADO
     public List<String> errores(Proceso proceso) {
         return validar(proceso).stream()
-                .filter(i -> ERROR.equals(i.get("nivel")))
-                .map(i -> (String) i.get("mensaje"))
+                .filter(i -> ERROR.equals(i.getNivel()))
+                .map(AdvertenciaResponse::getMensaje)
                 .toList();
     }
 
-    private void validarGateway(List<Map<String, Object>> items, Gateway gateway, int nEntrantes, List<Arco> salientes) {
+    private void validarGateway(List<AdvertenciaResponse> items, Gateway gateway, int nEntrantes, List<Arco> salientes) {
         // HU-14: un gateway de divergencia tiene al menos dos arcos salientes (o es de convergencia)
         boolean convergencia = nEntrantes >= 2 && salientes.size() == 1;
         if (salientes.size() < 2 && !convergencia) {
@@ -153,7 +155,7 @@ public class ValidacionService {
         }
     }
 
-    private void validarMensajes(List<Map<String, Object>> items, Proceso proceso, List<Pool> pools, List<Evento> recepciones) {
+    private void validarMensajes(List<AdvertenciaResponse> items, Proceso proceso, List<Pool> pools, List<Evento> recepciones) {
         List<Mensaje> mensajes = mensajeRepository.findByProcesoId(proceso.getId());
         Map<Integer, Correlacion> correlaciones = new HashMap<>();
         Map<String, Integer> nombreYClave = new HashMap<>();
@@ -174,6 +176,11 @@ public class ValidacionService {
             if (destinoInterno && !hayReceptor) {
                 items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
                         "El mensaje '" + m.getNombre() + "' queda sin receptor en el pool '" + m.getDestinoPool().getNombre() + "'"));
+            }
+            // HU-26: si deriva a manejo de error, la actividad de error debe seguir existiendo
+            if (m.getAccionFallo() == AccionFallo.DERIVAR_A_MANEJO_ERROR && m.getActividadError() == null) {
+                items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
+                        "El mensaje '" + m.getNombre() + "' deriva a manejo de error pero no tiene actividad de error"));
             }
             // HU-28: cada mensaje declara una clave de correlacion
             if (c == null) {
@@ -227,12 +234,7 @@ public class ValidacionService {
         return Objects.toString(nombre, "").trim().toLowerCase() + "|" + Objects.toString(criterio, "").trim().toLowerCase();
     }
 
-    private Map<String, Object> item(String nivel, String elemento, Integer id, String mensaje) {
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("nivel", nivel);
-        item.put("elemento", elemento);
-        item.put("elementoId", id);
-        item.put("mensaje", mensaje);
-        return item;
+    private AdvertenciaResponse item(String nivel, String elemento, Integer id, String mensaje) {
+        return new AdvertenciaResponse(nivel, elemento, id, mensaje);
     }
 }

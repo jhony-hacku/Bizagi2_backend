@@ -3,13 +3,13 @@ package desarrollo.web.Bizagi2.service;
 import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.proceso.EmpresaInvitadaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.ProcesoCompartidoResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.Proceso;
@@ -35,7 +35,7 @@ public class ProcesoCompartidoService {
     private final ProcesoService procesoService;
     private final HistorialService historialService;
 
-    public Map<String, Object> compartir(Integer procesoId, Usuario usuario, String nit) {
+    public EmpresaInvitadaResponse compartir(Integer procesoId, Usuario usuario, String nit) {
         requerido(nit, "nit");
         Proceso proceso = procesoService.buscarActivo(procesoId, usuario.getEmpresa().getId());
         Empresa invitada = empresaRepository.findByNit(nit.trim())
@@ -73,34 +73,29 @@ public class ProcesoCompartidoService {
 
     // Empresas con las que la empresa propietaria comparte el proceso
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> invitadas(Integer procesoId, Integer empresaId) {
+    public List<EmpresaInvitadaResponse> invitadas(Integer procesoId, Integer empresaId) {
         procesoService.buscarPorId(procesoId, empresaId);
         return procesoCompartidoRepository.findByProcesoIdAndActivoTrue(procesoId).stream().map(this::fila).toList();
     }
 
     // Procesos que otras empresas compartieron con la empresa del usuario
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> compartidosConmigo(Integer empresaId) {
+    public List<ProcesoCompartidoResponse> compartidosConmigo(Integer empresaId) {
         return procesoCompartidoRepository.findByEmpresaIdAndActivoTrue(empresaId).stream()
                 .filter(c -> c.getProceso().isActivo())
-                .map(c -> {
-                    Map<String, Object> f = new LinkedHashMap<>();
-                    f.put("procesoId", c.getProceso().getId());
-                    f.put("nombre", c.getProceso().getNombre());
-                    f.put("categoria", c.getProceso().getCategoria());
-                    f.put("estado", c.getProceso().getEstado());
-                    f.put("empresaPropietaria", c.getProceso().getEmpresa().getNombre());
-                    f.put("compartidoDesde", c.getFecha());
-                    return f;
-                }).toList();
+                .map(c -> new ProcesoCompartidoResponse(
+                        c.getProceso().getId(),
+                        c.getProceso().getNombre(),
+                        c.getProceso().getCategoria(),
+                        c.getProceso().getEstado(),
+                        c.getProceso().getEmpresa().getNombre(),
+                        c.getFecha()))
+                .toList();
     }
 
-    private Map<String, Object> fila(ProcesoCompartido c) {
-        Map<String, Object> f = new LinkedHashMap<>();
-        f.put("empresaId", c.getEmpresa().getId());
-        f.put("empresa", c.getEmpresa().getNombre());
-        f.put("nit", c.getEmpresa().getNit());
-        f.put("compartidoDesde", c.getFecha());
-        return f;
+    // Los nombres del DTO no coinciden con la entidad, por eso esta conversion es manual
+    private EmpresaInvitadaResponse fila(ProcesoCompartido c) {
+        return new EmpresaInvitadaResponse(c.getEmpresa().getId(), c.getEmpresa().getNombre(),
+                c.getEmpresa().getNit(), c.getFecha());
     }
 }

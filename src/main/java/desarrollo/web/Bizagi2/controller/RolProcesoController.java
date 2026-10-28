@@ -2,7 +2,6 @@ package desarrollo.web.Bizagi2.controller;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +16,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import desarrollo.web.Bizagi2.entities.Historial;
-import desarrollo.web.Bizagi2.entities.RolProceso;
+import desarrollo.web.Bizagi2.dto.proceso.HistorialResponse;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoDetalleResponse;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoRequest;
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoResponse;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.RolProcesoService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 // Roles de proceso: son de la empresa y se usan en las lanes de cualquiera de sus procesos
@@ -35,7 +37,7 @@ public class RolProcesoController {
 
     // Paginado, con busqueda por nombre. Cada rol indica en que procesos se usa y si se puede eliminar.
     @GetMapping
-    public ResponseEntity<PagedModel<Map<String, Object>>> listar(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<PagedModel<RolProcesoDetalleResponse>> listar(@AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String nombre,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -44,21 +46,22 @@ public class RolProcesoController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> detalle(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<RolProcesoDetalleResponse> detalle(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
         return ResponseEntity.ok(rolProcesoService.detalle(id, usuario.getEmpresa().getId()));
     }
 
     // Solo el ADMINISTRADOR. Body: nombre, descripcion
     @PostMapping
-    public ResponseEntity<RolProceso> crear(@AuthenticationPrincipal Usuario usuario, @RequestBody RolProceso datos) {
-        RolProceso creado = rolProcesoService.crear(usuario, datos);
+    public ResponseEntity<RolProcesoResponse> crear(@AuthenticationPrincipal Usuario usuario,
+            @Valid @RequestBody RolProcesoRequest datos) {
+        RolProcesoResponse creado = rolProcesoService.crear(usuario, datos);
         return ResponseEntity.created(URI.create("/api/roles-proceso/" + creado.getId())).body(creado);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<RolProceso> actualizar(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody RolProceso datos) {
+    public ResponseEntity<RolProcesoResponse> actualizar(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody RolProcesoRequest datos) {
         return ResponseEntity.ok(rolProcesoService.actualizar(id, usuario, datos));
     }
 
@@ -70,8 +73,8 @@ public class RolProcesoController {
     }
 
     @GetMapping("/{id}/historial")
-    public ResponseEntity<List<Historial>> historial(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<HistorialResponse>> historial(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
-        return ResponseEntity.ok(rolProcesoService.historial(id, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(rolProcesoService.historialDto(id, usuario.getEmpresa().getId()));
     }
 }

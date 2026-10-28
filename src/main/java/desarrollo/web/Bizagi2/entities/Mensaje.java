@@ -57,6 +57,11 @@ public class Mensaje {
     @Enumerated(EnumType.STRING)
     private AccionFallo accionFallo;
 
+    // HU-26: actividad de manejo de error a la que se deriva cuando accionFallo = DERIVAR_A_MANEJO_ERROR
+    @ManyToOne
+    @JoinColumn(name = "actividad_error_id")
+    private Actividad actividadError;
+
     @Column(nullable = false)
     @ColumnDefault("true")
     private boolean activo = true;

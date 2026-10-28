@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +16,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -87,14 +89,14 @@ class HU03_InicioSesionTest {
         when(passwordEncoder.matches("ClaveSecreta1", "$2a$10$encoded")).thenReturn(true);
         when(jwtService.generarToken(usuario)).thenReturn("jwt.token.valido");
 
-        Map<String, Object> respuesta = authService.login("laura@logistica.com", "ClaveSecreta1");
+        AuthResponse respuesta = authService.login(new LoginRequest("laura@logistica.com", "ClaveSecreta1"));
 
         assertThat(respuesta).isNotNull();
-        assertThat(respuesta.get("token")).isEqualTo("jwt.token.valido");
-        assertThat(respuesta.get("usuarioId")).isEqualTo(12);
-        assertThat(respuesta.get("empresaId")).isEqualTo(5);
-        assertThat(respuesta.get("empresa")).isEqualTo("Empresa Logistica");
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.EDITOR);
+        assertThat(respuesta.getToken()).isEqualTo("jwt.token.valido");
+        assertThat(respuesta.getUsuarioId()).isEqualTo(12);
+        assertThat(respuesta.getEmpresaId()).isEqualTo(5);
+        assertThat(respuesta.getEmpresa()).isEqualTo("Empresa Logistica");
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);
     }
 
     @Test

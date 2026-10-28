@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import desarrollo.web.Bizagi2.dto.rol.RolProcesoDetalleResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.Lane;
@@ -188,13 +188,13 @@ class RolProcesoServiceTest {
                 .thenReturn(new PageImpl<>(List.of(rol)));
         when(laneRepository.findByRolProcesoId(1)).thenReturn(List.of());
 
-        Page<Map<String, Object>> pagina = rolProcesoService.listar(1, "", 0, 10);
+        Page<RolProcesoDetalleResponse> pagina = rolProcesoService.listar(1, "", 0, 10);
 
         assertThat(pagina).isNotNull();
         assertThat(pagina.getContent()).hasSize(1);
-        Map<String, Object> fila = pagina.getContent().get(0);
-        assertThat(fila.get("nombre")).isEqualTo("Auditor");
-        assertThat(fila.get("enUso")).isEqualTo(false);
-        assertThat(fila.get("eliminable")).isEqualTo(true);
+        RolProcesoDetalleResponse fila = pagina.getContent().get(0);
+        assertThat(fila.getNombre()).isEqualTo("Auditor");
+        assertThat(fila.isEnUso()).isFalse();
+        assertThat(fila.isEliminable()).isTrue();
     }
 }

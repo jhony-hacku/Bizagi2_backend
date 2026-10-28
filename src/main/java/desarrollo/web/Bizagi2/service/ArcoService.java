@@ -1,11 +1,14 @@
 package desarrollo.web.Bizagi2.service;
 
 import java.util.List;
-import java.util.Map;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.arco.ArcoRequest;
+import desarrollo.web.Bizagi2.dto.arco.ArcoResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Arco;
 import desarrollo.web.Bizagi2.entities.Evento;
@@ -34,6 +37,7 @@ public class ArcoService {
     private final ProcesoService procesoService;
     private final HistorialService historialService;
     private final ValidacionService validacionService;
+    private final ModelMapper modelMapper;
 
     @Transactional(readOnly = true)
     public List<Arco> listarPorPool(Integer poolId, Integer empresaId) {
@@ -98,7 +102,7 @@ public class ArcoService {
     }
 
     // HU-13: eliminacion logica; se devuelven las advertencias que deja el diagrama
-    public Map<String, Object> eliminar(Integer id, Usuario usuario) {
+    public EliminacionResponse eliminar(Integer id, Usuario usuario) {
         Integer empresaId = usuario.getEmpresa().getId();
         Arco arco = buscarPorId(id, empresaId);
         Proceso proceso = procesoService.buscarActivo(arco.getPool().getProceso().getId(), empresaId);
@@ -145,5 +149,30 @@ public class ArcoService {
 
     private String texto(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+    // origenId / destinoId del DTO llegan como arco.origen.id / arco.destino.id
+
+    public ArcoResponse aResponse(Arco arco) {
+        return modelMapper.map(arco, ArcoResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ArcoResponse> listarPorPoolDto(Integer poolId, Integer empresaId) {
+        return listarPorPool(poolId, empresaId).stream().map(this::aResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ArcoResponse buscarPorIdDto(Integer id, Integer empresaId) {
+        return aResponse(buscarPorId(id, empresaId));
+    }
+
+    public ArcoResponse crear(Integer poolId, Usuario usuario, ArcoRequest datos) {
+        return aResponse(crear(poolId, usuario, modelMapper.map(datos, Arco.class)));
+    }
+
+    public ArcoResponse actualizar(Integer id, Usuario usuario, ArcoRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, Arco.class)));
     }
 }

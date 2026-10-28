@@ -3,9 +3,12 @@ package desarrollo.web.Bizagi2.service;
 import static desarrollo.web.Bizagi2.service.Validaciones.emailValido;
 import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.empresa.EmpresaRequest;
+import desarrollo.web.Bizagi2.dto.empresa.EmpresaResponse;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.exception.ConflictoDominioException;
 import desarrollo.web.Bizagi2.exception.RecursoNoEncontradoException;
@@ -18,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 public class EmpresaService {
 
     private final EmpresaRepository empresaRepository;
+    private final ModelMapper modelMapper;
 
     // HU-01: nombre, NIT (unico) y correo de contacto, todos obligatorios
     public Empresa crear(String nombre, String nit, String emailContacto) {
@@ -58,5 +62,17 @@ public class EmpresaService {
             empresa.setEditorModificaEstructura(datos.getEditorModificaEstructura());
         }
         return empresaRepository.save(empresa);
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+
+    @Transactional(readOnly = true)
+    public EmpresaResponse buscarPorIdDto(Integer id) {
+        return modelMapper.map(buscarPorId(id), EmpresaResponse.class);
+    }
+
+    public EmpresaResponse actualizar(Integer id, EmpresaRequest datos) {
+        Empresa actualizada = actualizar(id, modelMapper.map(datos, Empresa.class));
+        return modelMapper.map(actualizada, EmpresaResponse.class);
     }
 }
