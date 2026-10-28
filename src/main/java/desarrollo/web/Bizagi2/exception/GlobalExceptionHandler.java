@@ -8,6 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -76,6 +77,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> integridad(DataIntegrityViolationException ex) {
         log.warn("Violacion de integridad de datos", ex);
         return error(HttpStatus.CONFLICT, "La operacion viola una restriccion de integridad de datos");
+    }
+
+    // @Version: otra transaccion modifico el mismo registro mientras este se editaba
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> modificacionConcurrente(ObjectOptimisticLockingFailureException ex) {
+        return error(HttpStatus.CONFLICT, "El registro fue modificado por otro usuario; recarga e intenta de nuevo");
     }
 
     @ExceptionHandler(Exception.class)

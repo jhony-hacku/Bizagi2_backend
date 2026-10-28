@@ -1,5 +1,9 @@
 package desarrollo.web.Bizagi2.config;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.modelmapper.Converter;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +19,7 @@ import desarrollo.web.Bizagi2.dto.mensaje.MensajeRequest;
 import desarrollo.web.Bizagi2.dto.mensaje.MensajeResponse;
 import desarrollo.web.Bizagi2.dto.nodo.ActividadResponse;
 import desarrollo.web.Bizagi2.dto.nodo.ActividadUpdateRequest;
+import desarrollo.web.Bizagi2.dto.nodo.EventoRequest;
 import desarrollo.web.Bizagi2.dto.nodo.EventoResponse;
 import desarrollo.web.Bizagi2.dto.nodo.GatewayResponse;
 import desarrollo.web.Bizagi2.dto.pool.PoolResponse;
@@ -29,6 +34,7 @@ import desarrollo.web.Bizagi2.entities.Gateway;
 import desarrollo.web.Bizagi2.entities.Historial;
 import desarrollo.web.Bizagi2.entities.Lane;
 import desarrollo.web.Bizagi2.entities.Mensaje;
+import desarrollo.web.Bizagi2.entities.NodoFlujo;
 import desarrollo.web.Bizagi2.entities.Pool;
 import desarrollo.web.Bizagi2.entities.Proceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -82,8 +88,13 @@ public class ModelMapperConfig {
         mapper.typeMap(Gateway.class, GatewayResponse.class).addMappings(m ->
                 m.map(src -> src.getPool().getId(), GatewayResponse::setPoolId));
 
-        mapper.typeMap(Evento.class, EventoResponse.class).addMappings(m ->
-                m.map(src -> src.getPool().getId(), EventoResponse::setPoolId));
+        // actividadesUsuarias: en la API son ids de actividades; en la entidad, la relacion @ManyToMany
+        mapper.typeMap(Evento.class, EventoResponse.class).addMappings(m -> {
+            m.map(src -> src.getPool().getId(), EventoResponse::setPoolId);
+            m.using(actividadesAIds()).map(Evento::getActividadesUsuarias, EventoResponse::setActividadesUsuarias);
+        });
+        mapper.typeMap(EventoRequest.class, Evento.class).addMappings(m ->
+                m.using(idsAActividades()).map(EventoRequest::getActividadesUsuarias, Evento::setActividadesUsuarias));
 
         mapper.typeMap(Arco.class, ArcoResponse.class).addMappings(m -> {
             m.map(src -> src.getPool().getId(), ArcoResponse::setPoolId);
@@ -134,5 +145,19 @@ public class ModelMapperConfig {
             m.<Integer>map(MensajeRequest::getDestinoPoolId, (dest, v) -> dest.getDestinoPool().setId(v));
             m.<Integer>map(MensajeRequest::getActividadErrorId, (dest, v) -> dest.getActividadError().setId(v));
         });
+    }
+
+    private static Converter<Set<Actividad>, Set<Integer>> actividadesAIds() {
+        return ctx -> ctx.getSource() == null ? null
+                : ctx.getSource().stream().map(NodoFlujo::getId).collect(Collectors.toSet());
+    }
+
+    // Cada id llega como una referencia (Actividad con solo el id); el servicio busca la actividad real
+    private static Converter<Set<Integer>, Set<Actividad>> idsAActividades() {
+        return ctx -> ctx.getSource() == null ? null : ctx.getSource().stream().map(id -> {
+            Actividad referencia = new Actividad();
+            referencia.setId(id);
+            return referencia;
+        }).collect(Collectors.toSet());
     }
 }

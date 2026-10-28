@@ -749,7 +749,7 @@ class NodoFlujoServiceTest {
         datos.setContenido("contenido");
         datos.setClaveCorrelacion("clave");
         datos.setOrigenExterno(true);
-        datos.setActividadesUsuarias(Set.of(500));
+        datos.setActividadesUsuarias(referencias(500));
 
         Evento resultado = nodoFlujoService.crearEvento(30, usuario, datos);
 
@@ -768,7 +768,7 @@ class NodoFlujoServiceTest {
         datos.setContenido("Factura enviada");
         datos.setClaveCorrelacion("nroFactura");
         datos.setOrigenExterno(true);
-        datos.setActividadesUsuarias(Set.of(500));
+        datos.setActividadesUsuarias(referencias(500));
 
         Evento resultado = nodoFlujoService.crearEvento(30, usuario, datos);
 
@@ -829,11 +829,11 @@ class NodoFlujoServiceTest {
         when(nodoFlujoRepository.findById(501)).thenReturn(Optional.of(a2));
 
         Evento datos = datosEvento(TipoEvento.MENSAJE_RECEPCION_INTERMEDIO);
-        datos.setActividadesUsuarias(Set.of(500, 501));
+        datos.setActividadesUsuarias(referencias(500, 501));
 
         Evento resultado = nodoFlujoService.crearEvento(30, usuario, datos);
 
-        assertThat(resultado.getActividadesUsuarias()).containsExactlyInAnyOrder(500, 501);
+        assertThat(resultado.getActividadesUsuarias()).extracting(Actividad::getId).containsExactlyInAnyOrder(500, 501);
     }
 
     @Test
@@ -843,7 +843,7 @@ class NodoFlujoServiceTest {
         when(nodoFlujoRepository.findById(500)).thenReturn(Optional.of(actividadDeOtroProceso(500)));
 
         Evento datos = datosEvento(TipoEvento.MENSAJE_RECEPCION_INTERMEDIO);
-        datos.setActividadesUsuarias(Set.of(500));
+        datos.setActividadesUsuarias(referencias(500));
 
         assertThatThrownBy(() -> nodoFlujoService.crearEvento(30, usuario, datos))
                 .isInstanceOf(ReglaNegocioException.class)
@@ -859,7 +859,7 @@ class NodoFlujoServiceTest {
         when(nodoFlujoRepository.findById(500)).thenReturn(Optional.of(deOtraEmpresa(new Actividad(), 500)));
 
         Evento datos = datosEvento(TipoEvento.MENSAJE_RECEPCION_INTERMEDIO);
-        datos.setActividadesUsuarias(Set.of(500));
+        datos.setActividadesUsuarias(referencias(500));
 
         assertThatThrownBy(() -> nodoFlujoService.crearEvento(30, usuario, datos))
                 .isInstanceOf(RecursoNoEncontradoException.class);
@@ -874,7 +874,7 @@ class NodoFlujoServiceTest {
         when(nodoFlujoRepository.findById(500)).thenReturn(Optional.empty());
 
         Evento datos = datosEvento(TipoEvento.MENSAJE_RECEPCION_INTERMEDIO);
-        datos.setActividadesUsuarias(Set.of(500));
+        datos.setActividadesUsuarias(referencias(500));
 
         assertThatThrownBy(() -> nodoFlujoService.crearEvento(30, usuario, datos))
                 .isInstanceOf(RecursoNoEncontradoException.class);
@@ -1049,4 +1049,15 @@ class NodoFlujoServiceTest {
         verify(nodoFlujoRepository, never()).save(any());
         verify(arcoRepository, never()).save(any());
     }
-}
+
+    // Referencias a actividades por id, como las que produce ModelMapper desde actividadesUsuarias del request
+    private static Set<Actividad> referencias(Integer... ids) {
+        Set<Actividad> actividades = new java.util.HashSet<>();
+        for (Integer id : ids) {
+            Actividad actividad = new Actividad();
+            actividad.setId(id);
+            actividades.add(actividad);
+        }
+        return actividades;
+    }
+}

@@ -273,17 +273,19 @@ public class NodoFlujoService {
         evento.setClaveCorrelacion(mensaje ? datos.getClaveCorrelacion() : null);
         evento.setOrigenExterno(recepcion ? Boolean.TRUE.equals(datos.getOrigenExterno()) : null);
 
-        Set<Integer> actividades = new HashSet<>();
+        // Llegan como referencias (solo el id): se cambia cada una por la actividad real del mismo proceso
+        Set<Actividad> actividades = new HashSet<>();
         if (recepcion && datos.getActividadesUsuarias() != null) {
-            for (Integer actividadId : datos.getActividadesUsuarias()) {
-                Actividad actividad = buscarActividad(actividadId, empresaId);
+            for (Actividad referencia : datos.getActividadesUsuarias()) {
+                Actividad actividad = buscarActividad(referencia.getId(), empresaId);
                 if (!actividad.getPool().getProceso().getId().equals(procesoId)) {
-                    throw new ReglaNegocioException("La actividad " + actividadId + " no es de este proceso");
+                    throw new ReglaNegocioException("La actividad " + referencia.getId() + " no es de este proceso");
                 }
-                actividades.add(actividadId);
+                actividades.add(actividad);
             }
         }
-        evento.setActividadesUsuarias(actividades);
+        evento.getActividadesUsuarias().clear();
+        evento.getActividadesUsuarias().addAll(actividades);
     }
 
     // HU-08: el nombre de una actividad es unico dentro del proceso
