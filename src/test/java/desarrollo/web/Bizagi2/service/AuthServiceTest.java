@@ -7,9 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +14,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -57,28 +57,28 @@ class AuthServiceTest {
         when(usuarioService.crear(eq(1), any(Usuario.class))).thenReturn(admin);
         when(jwtService.generarToken(admin)).thenReturn("token.jwt.valido");
 
-        Map<String, String> datos = new HashMap<>();
-        datos.put("nombreEmpresa", "Tech SA");
-        datos.put("nit", "900111222");
-        datos.put("emailContacto", "info@tech.com");
-        datos.put("nombre", "Carlos Admin");
-        datos.put("email", "admin@tech.com");
-        datos.put("password", "Secure12345");
+        RegistroRequest datos = new RegistroRequest();
+        datos.setNombreEmpresa("Tech SA");
+        datos.setNit("900111222");
+        datos.setEmailContacto("info@tech.com");
+        datos.setNombre("Carlos Admin");
+        datos.setEmail("admin@tech.com");
+        datos.setPassword("Secure12345");
 
-        Map<String, Object> respuesta = authService.registrar(datos);
+        AuthResponse respuesta = authService.registrar(datos);
 
         assertThat(respuesta).isNotNull();
-        assertThat(respuesta.get("token")).isEqualTo("token.jwt.valido");
-        assertThat(respuesta.get("usuarioId")).isEqualTo(10);
-        assertThat(respuesta.get("empresaId")).isEqualTo(1);
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.ADMINISTRADOR);
+        assertThat(respuesta.getToken()).isEqualTo("token.jwt.valido");
+        assertThat(respuesta.getUsuarioId()).isEqualTo(10);
+        assertThat(respuesta.getEmpresaId()).isEqualTo(1);
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
     }
 
     @Test
     @DisplayName("HU-01 CA5: Registrar con campos faltantes lanza ReglaNegocioException")
     void registrar_camposFaltantes_lanzaReglaNegocio() {
-        Map<String, String> datos = new HashMap<>();
-        datos.put("nombreEmpresa", "Tech SA");
+        RegistroRequest datos = new RegistroRequest();
+        datos.setNombreEmpresa("Tech SA");
         // nit falta
 
         assertThatThrownBy(() -> authService.registrar(datos))
@@ -103,12 +103,12 @@ class AuthServiceTest {
         when(usuarioService.autenticar("carlos@tech.com", "Password123")).thenReturn(usuario);
         when(jwtService.generarToken(usuario)).thenReturn("token.login.ok");
 
-        Map<String, Object> respuesta = authService.login("carlos@tech.com", "Password123");
+        AuthResponse respuesta = authService.login(new LoginRequest("carlos@tech.com", "Password123"));
 
-        assertThat(respuesta.get("token")).isEqualTo("token.login.ok");
-        assertThat(respuesta.get("empresaId")).isEqualTo(1);
-        assertThat(respuesta.get("empresa")).isEqualTo("Tech SA");
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.EDITOR);
+        assertThat(respuesta.getToken()).isEqualTo("token.login.ok");
+        assertThat(respuesta.getEmpresaId()).isEqualTo(1);
+        assertThat(respuesta.getEmpresa()).isEqualTo("Tech SA");
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);
     }
 
     @Test
