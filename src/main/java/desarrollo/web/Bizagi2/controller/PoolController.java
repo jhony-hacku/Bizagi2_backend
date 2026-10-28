@@ -13,10 +13,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import desarrollo.web.Bizagi2.entities.Pool;
+import desarrollo.web.Bizagi2.dto.pool.PoolRequest;
+import desarrollo.web.Bizagi2.dto.pool.PoolResponse;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.PoolService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -27,28 +29,28 @@ public class PoolController {
     private final PoolService poolService;
 
     @GetMapping("/api/procesos/{procesoId}/pools")
-    public ResponseEntity<List<Pool>> listar(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<PoolResponse>> listar(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer procesoId) {
-        return ResponseEntity.ok(poolService.listarPorProceso(procesoId, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(poolService.listarPorProcesoDto(procesoId, usuario.getEmpresa().getId()));
     }
 
     // Body: nombre, tipoParticipante (EMPRESA_PROPIETARIA | CLIENTE | PROVEEDOR | SISTEMA_EXTERNO).
     // Los participantes externos son cajas negras: no admiten lanes ni elementos.
     @PostMapping("/api/procesos/{procesoId}/pools")
-    public ResponseEntity<Pool> crear(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer procesoId, @RequestBody Pool datos) {
-        Pool creado = poolService.crear(procesoId, usuario, datos);
+    public ResponseEntity<PoolResponse> crear(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer procesoId, @Valid @RequestBody PoolRequest datos) {
+        PoolResponse creado = poolService.crear(procesoId, usuario, datos);
         return ResponseEntity.created(URI.create("/api/pools/" + creado.getId())).body(creado);
     }
 
     @GetMapping("/api/pools/{id}")
-    public ResponseEntity<Pool> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
-        return ResponseEntity.ok(poolService.buscarPorId(id, usuario.getEmpresa().getId()));
+    public ResponseEntity<PoolResponse> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
+        return ResponseEntity.ok(poolService.buscarPorIdDto(id, usuario.getEmpresa().getId()));
     }
 
     @PutMapping("/api/pools/{id}")
-    public ResponseEntity<Pool> actualizar(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody Pool datos) {
+    public ResponseEntity<PoolResponse> actualizar(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody PoolRequest datos) {
         return ResponseEntity.ok(poolService.actualizar(id, usuario, datos));
     }
 

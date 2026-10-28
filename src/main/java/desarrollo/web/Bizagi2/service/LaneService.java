@@ -4,9 +4,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.lane.LaneCreateRequest;
+import desarrollo.web.Bizagi2.dto.lane.LaneResponse;
+import desarrollo.web.Bizagi2.dto.lane.LaneUpdateRequest;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Lane;
 import desarrollo.web.Bizagi2.entities.Pool;
@@ -31,6 +35,7 @@ public class LaneService {
     private final RolProcesoService rolProcesoService;
     private final ProcesoService procesoService;
     private final HistorialService historialService;
+    private final ModelMapper modelMapper;
 
     @Transactional(readOnly = true)
     public List<Lane> listarPorPool(Integer poolId, Integer empresaId) {
@@ -137,5 +142,34 @@ public class LaneService {
 
     private String nombreDe(Lane datos, RolProceso rol) {
         return datos.getNombre() == null || datos.getNombre().isBlank() ? rol.getNombre() : datos.getNombre().trim();
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+    // ModelMapper (STRICT) convierte rolProcesoId del DTO en lane.rolProceso.id
+
+    public LaneResponse aResponse(Lane lane) {
+        return modelMapper.map(lane, LaneResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LaneResponse> listarPorPoolDto(Integer poolId, Integer empresaId) {
+        return listarPorPool(poolId, empresaId).stream().map(this::aResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public LaneResponse buscarPorIdDto(Integer id, Integer empresaId) {
+        return aResponse(buscarPorId(id, empresaId));
+    }
+
+    public LaneResponse crear(Integer poolId, Usuario usuario, LaneCreateRequest datos) {
+        return aResponse(crear(poolId, usuario, modelMapper.map(datos, Lane.class)));
+    }
+
+    public LaneResponse actualizar(Integer id, Usuario usuario, LaneUpdateRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, Lane.class)));
+    }
+
+    public List<LaneResponse> reordenarDto(Integer poolId, Usuario usuario, List<Integer> idsEnOrden) {
+        return reordenar(poolId, usuario, idsEnOrden).stream().map(this::aResponse).toList();
     }
 }
