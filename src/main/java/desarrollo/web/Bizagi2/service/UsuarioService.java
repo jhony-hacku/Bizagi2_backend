@@ -6,11 +6,15 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.List;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioCreateRequest;
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioResponse;
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioUpdateRequest;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.ConflictoDominioException;
@@ -26,6 +30,7 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final EmpresaService empresaService;
     private final PasswordEncoder passwordEncoder;
+    private final ModelMapper modelMapper;
 
     // Incluye a los desactivados, para que el administrador pueda volver a activarlos
     @Transactional(readOnly = true)
@@ -143,5 +148,34 @@ public class UsuarioService {
         if (!hayOtro) {
             throw new ConflictoDominioException("La empresa debe conservar al menos un administrador activo");
         }
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+    // Las reglas de negocio siguen en los metodos de arriba; estos solo convierten con ModelMapper.
+
+    public UsuarioResponse aResponse(Usuario usuario) {
+        return modelMapper.map(usuario, UsuarioResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UsuarioResponse> listarDto(Integer empresaId) {
+        return listar(empresaId).stream().map(this::aResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UsuarioResponse buscarPorIdDto(Integer id, Integer empresaId) {
+        return aResponse(buscarPorId(id, empresaId));
+    }
+
+    public UsuarioResponse crear(Integer empresaId, UsuarioCreateRequest datos) {
+        return aResponse(crear(empresaId, modelMapper.map(datos, Usuario.class)));
+    }
+
+    public UsuarioResponse actualizar(Integer id, Integer empresaId, UsuarioUpdateRequest datos) {
+        return aResponse(actualizar(id, empresaId, modelMapper.map(datos, Usuario.class)));
+    }
+
+    public UsuarioResponse activarDto(Integer id, Integer empresaId) {
+        return aResponse(activar(id, empresaId));
     }
 }
