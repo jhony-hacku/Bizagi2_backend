@@ -2,9 +2,12 @@ package desarrollo.web.Bizagi2.service;
 
 import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.correlacion.CorrelacionRequest;
+import desarrollo.web.Bizagi2.dto.correlacion.CorrelacionResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Correlacion;
 import desarrollo.web.Bizagi2.entities.Mensaje;
@@ -25,6 +28,7 @@ public class CorrelacionService {
     private final MensajeService mensajeService;
     private final ProcesoService procesoService;
     private final HistorialService historialService;
+    private final ModelMapper modelMapper;
 
     @Transactional(readOnly = true)
     public Correlacion obtener(Integer mensajeId, Integer empresaId) {
@@ -72,5 +76,24 @@ public class CorrelacionService {
         correlacionRepository.delete(correlacion);
         historialService.registrar(usuario, proceso, AccionHistorial.ELIMINAR, "CORRELACION", correlacion.getId(),
                 "Clave de correlacion del mensaje '" + correlacion.getMensaje().getNombre() + "' eliminada");
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+
+    public CorrelacionResponse aResponse(Correlacion correlacion) {
+        return modelMapper.map(correlacion, CorrelacionResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public CorrelacionResponse obtenerDto(Integer mensajeId, Integer empresaId) {
+        return aResponse(obtener(mensajeId, empresaId));
+    }
+
+    public CorrelacionResponse crear(Integer mensajeId, Usuario usuario, CorrelacionRequest datos) {
+        return aResponse(crear(mensajeId, usuario, modelMapper.map(datos, Correlacion.class)));
+    }
+
+    public CorrelacionResponse actualizar(Integer mensajeId, Usuario usuario, CorrelacionRequest datos) {
+        return aResponse(actualizar(mensajeId, usuario, modelMapper.map(datos, Correlacion.class)));
     }
 }

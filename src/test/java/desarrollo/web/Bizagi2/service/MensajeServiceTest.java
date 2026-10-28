@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.entities.AccionFallo;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Empresa;
@@ -191,6 +192,88 @@ class MensajeServiceTest {
         Mensaje creado = mensajeService.crear(20, usuario, datos);
 
         assertThat(creado.getTipoDestino()).isEqualTo(TipoDestino.CORREO);
+    }
+
+    // ---------- HU-26: derivar a una actividad de manejo de error ----------
+
+    private Pool poolSistemaExterno() {
+        Pool poolExterno = new Pool();
+        poolExterno.setId(33);
+        poolExterno.setProceso(proceso);
+        poolExterno.setNombre("Servicio de pagos");
+        poolExterno.setTipoParticipante(TipoParticipante.SISTEMA_EXTERNO);
+        return poolExterno;
+    }
+
+    private Mensaje derivaAError(Pool destino, Actividad actividadError) {
+        Mensaje datos = new Mensaje();
+        datos.setNombre("Cobro");
+        datos.setOrigen(eventoLanzamiento);
+        datos.setDestinoPool(destino);
+        datos.setTipoDestino(TipoDestino.SERVICIO_WEB);
+        datos.setAccionFallo(AccionFallo.DERIVAR_A_MANEJO_ERROR);
+        datos.setActividadError(actividadError);
+        return datos;
+    }
+
+    @Test
+    @DisplayName("HU-26: Derivar a manejo de error sin indicar la actividad de error -> ReglaNegocio")
+    void crear_derivarSinActividadError_lanzaReglaNegocio() {
+        Pool externo = poolSistemaExterno();
+        when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
+        when(nodoFlujoService.buscarNodo(100, 1)).thenReturn(eventoLanzamiento);
+        when(poolService.buscarPorId(33, 1)).thenReturn(externo);
+
+        assertThatThrownBy(() -> mensajeService.crear(20, usuario, derivaAError(externo, null)))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("actividadErrorId");
+    }
+
+    @Test
+    @DisplayName("HU-26: La actividad de error debe ser del mismo proceso")
+    void crear_derivarAActividadDeOtroProceso_lanzaReglaNegocio() {
+        Pool externo = poolSistemaExterno();
+        Proceso otroProceso = new Proceso();
+        otroProceso.setId(99);
+        Pool poolOtro = new Pool();
+        poolOtro.setProceso(otroProceso);
+        Actividad ajena = new Actividad();
+        ajena.setId(500);
+        ajena.setPool(poolOtro);
+
+        when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
+        when(nodoFlujoService.buscarNodo(100, 1)).thenReturn(eventoLanzamiento);
+        when(poolService.buscarPorId(33, 1)).thenReturn(externo);
+        when(nodoFlujoService.buscarActividad(500, 1)).thenReturn(ajena);
+
+        Actividad referencia = new Actividad();
+        referencia.setId(500);
+        assertThatThrownBy(() -> mensajeService.crear(20, usuario, derivaAError(externo, referencia)))
+                .isInstanceOf(ReglaNegocioException.class)
+                .hasMessageContaining("debe pertenecer al proceso 20");
+    }
+
+    @Test
+    @DisplayName("HU-26: Derivar a manejo de error guarda la actividad de error")
+    void crear_derivarConActividadError_guardaActividad() {
+        Pool externo = poolSistemaExterno();
+        Actividad manejoError = new Actividad();
+        manejoError.setId(501);
+        manejoError.setNombre("Gestionar fallo de cobro");
+        manejoError.setPool(poolOrigen);
+
+        when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
+        when(nodoFlujoService.buscarNodo(100, 1)).thenReturn(eventoLanzamiento);
+        when(poolService.buscarPorId(33, 1)).thenReturn(externo);
+        when(nodoFlujoService.buscarActividad(501, 1)).thenReturn(manejoError);
+        when(mensajeRepository.save(any(Mensaje.class))).thenAnswer(i -> i.getArgument(0));
+
+        Actividad referencia = new Actividad();
+        referencia.setId(501);
+        Mensaje creado = mensajeService.crear(20, usuario, derivaAError(externo, referencia));
+
+        assertThat(creado.getActividadError()).isSameAs(manejoError);
+        assertThat(creado.getAccionFallo()).isEqualTo(AccionFallo.DERIVAR_A_MANEJO_ERROR);
     }
 
     @Test
