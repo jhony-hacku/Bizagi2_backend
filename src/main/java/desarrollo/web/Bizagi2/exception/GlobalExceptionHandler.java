@@ -22,7 +22,7 @@ import desarrollo.web.Bizagi2.dto.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 
 // Todas las excepciones se traducen aqui a un JSON uniforme (ErrorResponse): { status, message, timestamp }.
-// Los errores de @Valid agregan "errores": { campo: mensaje }
+// Los errores de @Valid agregan ademas el mapa "errores", con el mensaje de cada campo invalido
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {

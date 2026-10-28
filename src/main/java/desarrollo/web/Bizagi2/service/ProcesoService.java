@@ -48,7 +48,6 @@ public class ProcesoService {
 
     // HU-07: listado paginado con busqueda por nombre y filtros por estado y categoria.
     // Por defecto solo los procesos activos; con activo=false se consultan los eliminados (HU-06).
-    @Transactional(readOnly = true)
     public Page<Proceso> listar(Integer empresaId, String nombre, EstadoProceso estado, String categoria,
             boolean activo, int pagina, int tamano) {
         if (pagina < 0 || tamano < 1 || tamano > TAMANO_MAXIMO) {
@@ -64,7 +63,6 @@ public class ProcesoService {
     }
 
     // Para consultar: devuelve el proceso aunque este inactivo (siempre que sea de la empresa)
-    @Transactional(readOnly = true)
     public Proceso buscarPorId(Integer id, Integer empresaId) {
         Proceso proceso = procesoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Proceso no encontrado"));
@@ -75,7 +73,6 @@ public class ProcesoService {
     }
 
     // HU-23: un proceso compartido tambien lo puede consultar la empresa invitada (solo lectura)
-    @Transactional(readOnly = true)
     public Proceso buscarParaLectura(Integer id, Integer empresaId) {
         Proceso proceso = procesoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Proceso no encontrado"));
@@ -89,7 +86,6 @@ public class ProcesoService {
     }
 
     // Para modificar o agregarle elementos: un proceso eliminado ya no admite cambios
-    @Transactional(readOnly = true)
     public Proceso buscarActivo(Integer id, Integer empresaId) {
         Proceso proceso = buscarPorId(id, empresaId);
         if (!proceso.isActivo()) {
@@ -176,7 +172,6 @@ public class ProcesoService {
     }
 
     // HU-07: historial de cambios del proceso y de su diagrama, del mas reciente al mas antiguo
-    @Transactional(readOnly = true)
     public List<Historial> historial(Integer id, Integer empresaId) {
         return historialService.delProceso(buscarPorId(id, empresaId).getId());
     }

@@ -63,12 +63,10 @@ public class RolProcesoService {
     }
 
     // Los roles que se pueden asignar a las lanes de los pools de la empresa (HU-24)
-    @Transactional(readOnly = true)
     public List<RolProceso> disponibles(Integer empresaId) {
         return rolProcesoRepository.findByEmpresaIdOrderByNombre(empresaId);
     }
 
-    @Transactional(readOnly = true)
     public RolProceso buscarPorId(Integer id, Integer empresaId) {
         RolProceso rol = rolProcesoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Rol de proceso no encontrado"));
@@ -128,7 +126,6 @@ public class RolProcesoService {
                 "Rol '" + rol.getNombre() + "' eliminado (pasa a inactivo)");
     }
 
-    @Transactional(readOnly = true)
     public List<Historial> historial(Integer id, Integer empresaId) {
         buscarPorId(id, empresaId);
         return historialService.deEntidad("ROL", id);

@@ -30,7 +30,6 @@ public class CorrelacionService {
     private final HistorialService historialService;
     private final ModelMapper modelMapper;
 
-    @Transactional(readOnly = true)
     public Correlacion obtener(Integer mensajeId, Integer empresaId) {
         mensajeService.buscarPorId(mensajeId, empresaId);
         return correlacionRepository.findByMensajeId(mensajeId)

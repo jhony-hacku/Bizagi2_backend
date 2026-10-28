@@ -33,12 +33,10 @@ public class UsuarioService {
     private final ModelMapper modelMapper;
 
     // Incluye a los desactivados, para que el administrador pueda volver a activarlos
-    @Transactional(readOnly = true)
     public List<Usuario> listar(Integer empresaId) {
         return usuarioRepository.findByEmpresaId(empresaId);
     }
 
-    @Transactional(readOnly = true)
     public Usuario buscarPorId(Integer id, Integer empresaId) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));

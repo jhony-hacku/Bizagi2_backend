@@ -224,7 +224,8 @@ class MensajeServiceTest {
         when(nodoFlujoService.buscarNodo(100, 1)).thenReturn(eventoLanzamiento);
         when(poolService.buscarPorId(33, 1)).thenReturn(externo);
 
-        assertThatThrownBy(() -> mensajeService.crear(20, usuario, derivaAError(externo, null)))
+        Mensaje sinActividad = derivaAError(externo, null);
+        assertThatThrownBy(() -> mensajeService.crear(20, usuario, sinActividad))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("actividadErrorId");
     }
@@ -248,7 +249,8 @@ class MensajeServiceTest {
 
         Actividad referencia = new Actividad();
         referencia.setId(500);
-        assertThatThrownBy(() -> mensajeService.crear(20, usuario, derivaAError(externo, referencia)))
+        Mensaje deOtroProceso = derivaAError(externo, referencia);
+        assertThatThrownBy(() -> mensajeService.crear(20, usuario, deOtroProceso))
                 .isInstanceOf(ReglaNegocioException.class)
                 .hasMessageContaining("debe pertenecer al proceso 20");
     }
