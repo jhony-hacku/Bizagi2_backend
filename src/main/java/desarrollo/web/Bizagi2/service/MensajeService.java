@@ -41,13 +41,11 @@ public class MensajeService {
     private final HistorialService historialService;
     private final ModelMapper modelMapper;
 
-    @Transactional(readOnly = true)
     public List<Mensaje> listarPorProceso(Integer procesoId, Integer empresaId) {
         procesoService.buscarPorId(procesoId, empresaId);
         return mensajeRepository.findByProcesoId(procesoId);
     }
 
-    @Transactional(readOnly = true)
     public Mensaje buscarPorId(Integer id, Integer empresaId) {
         Mensaje mensaje = mensajeRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Mensaje no encontrado"));

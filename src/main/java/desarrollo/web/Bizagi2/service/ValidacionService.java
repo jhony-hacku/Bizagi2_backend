@@ -49,62 +49,14 @@ public class ValidacionService {
 
     public List<AdvertenciaResponse> validar(Proceso proceso) {
         List<AdvertenciaResponse> items = new ArrayList<>();
-        List<Pool> pools = poolRepository.findByProcesoId(proceso.getId());
         List<Evento> recepciones = new ArrayList<>();
-        Map<Integer, Integer> entrantesPorNodo = new HashMap<>();
-
-        for (Pool pool : pools) {
-            if (pool.getTipoParticipante() != TipoParticipante.EMPRESA_PROPIETARIA) {
-                continue; // los participantes externos son cajas negras
-            }
-            List<NodoFlujo> nodos = nodoFlujoRepository.findByPoolId(pool.getId());
-            List<Arco> arcos = arcoRepository.findByPoolId(pool.getId());
-            Map<Integer, List<Arco>> salientes = new HashMap<>();
-            Map<Integer, Integer> entrantes = new HashMap<>();
-            for (Arco arco : arcos) {
-                salientes.computeIfAbsent(arco.getOrigen().getId(), k -> new ArrayList<>()).add(arco);
-                entrantes.merge(arco.getDestino().getId(), 1, Integer::sum);
-            }
-            entrantesPorNodo.putAll(entrantes);
-
-            for (NodoFlujo nodo : nodos) {
-                int nEntrantes = entrantes.getOrDefault(nodo.getId(), 0);
-                List<Arco> misSalientes = salientes.getOrDefault(nodo.getId(), List.of());
-                String tipo = tipoDe(nodo);
-
-                // HU-10 y HU-13: elementos desconectados
-                boolean esInicio = nodo instanceof Evento e
-                        && (e.getTipoEvento() == TipoEvento.INICIO || e.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INICIO);
-                boolean esFin = nodo instanceof Evento e && e.getTipoEvento() == TipoEvento.FIN;
-                if (nEntrantes == 0 && !esInicio) {
-                    items.add(item(ADVERTENCIA, tipo, nodo.getId(),
-                            "'" + nodo.getNombre() + "' no tiene camino de entrada"));
-                }
-                if (misSalientes.isEmpty() && !esFin) {
-                    items.add(item(ADVERTENCIA, tipo, nodo.getId(),
-                            "'" + nodo.getNombre() + "' no tiene camino de salida"));
-                }
-
-                if (nodo instanceof Gateway gateway) {
-                    validarGateway(items, gateway, nEntrantes, misSalientes);
-                } else if (misSalientes.size() >= 2) {
-                    // HU-16: una ramificacion necesita un gateway como punto de decision
-                    items.add(item(ADVERTENCIA, tipo, nodo.getId(), "'" + nodo.getNombre() + "' se divide en "
-                            + misSalientes.size() + " caminos sin un gateway que funcione como punto de decision"));
-                }
-                if (nodo instanceof Evento evento) {
-                    if (evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INICIO
-                            || evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INTERMEDIO) {
-                        recepciones.add(evento);
-                    }
-                    if (evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INICIO && nEntrantes > 0) {
-                        items.add(item(ERROR, "EVENTO", evento.getId(),
-                                "El Message Catch de inicio '" + evento.getNombre() + "' no puede tener arcos entrantes"));
-                    }
-                }
+        for (Pool pool : poolRepository.findByProcesoId(proceso.getId())) {
+            // Los participantes externos son cajas negras: solo se valida el flujo de los pools internos
+            if (pool.getTipoParticipante() == TipoParticipante.EMPRESA_PROPIETARIA) {
+                validarPool(items, pool, recepciones);
             }
         }
-        validarMensajes(items, proceso, pools, recepciones);
+        validarMensajes(items, proceso, recepciones);
         return items;
     }
 
@@ -121,6 +73,65 @@ public class ValidacionService {
                 .toList();
     }
 
+    // ---------- Flujo dentro de un pool ----------
+
+    private void validarPool(List<AdvertenciaResponse> items, Pool pool, List<Evento> recepciones) {
+        Map<Integer, List<Arco>> salientes = new HashMap<>();
+        Map<Integer, Integer> entrantes = new HashMap<>();
+        for (Arco arco : arcoRepository.findByPoolId(pool.getId())) {
+            salientes.computeIfAbsent(arco.getOrigen().getId(), k -> new ArrayList<>()).add(arco);
+            entrantes.merge(arco.getDestino().getId(), 1, Integer::sum);
+        }
+        for (NodoFlujo nodo : nodoFlujoRepository.findByPoolId(pool.getId())) {
+            int nEntrantes = entrantes.getOrDefault(nodo.getId(), 0);
+            List<Arco> misSalientes = salientes.getOrDefault(nodo.getId(), List.of());
+            validarNodo(items, nodo, nEntrantes, misSalientes, recepciones);
+        }
+    }
+
+    private void validarNodo(List<AdvertenciaResponse> items, NodoFlujo nodo, int nEntrantes, List<Arco> salientes,
+            List<Evento> recepciones) {
+        String tipo = tipoDe(nodo);
+        validarConexiones(items, nodo, tipo, nEntrantes, salientes);
+        if (nodo instanceof Gateway gateway) {
+            validarGateway(items, gateway, nEntrantes, salientes);
+        } else if (salientes.size() >= 2) {
+            // HU-16: una ramificacion necesita un gateway como punto de decision
+            items.add(item(ADVERTENCIA, tipo, nodo.getId(), "'" + nodo.getNombre() + "' se divide en "
+                    + salientes.size() + " caminos sin un gateway que funcione como punto de decision"));
+        }
+        if (nodo instanceof Evento evento) {
+            validarEventoDeRecepcion(items, evento, nEntrantes, recepciones);
+        }
+    }
+
+    // HU-10 y HU-13: elementos desconectados
+    private void validarConexiones(List<AdvertenciaResponse> items, NodoFlujo nodo, String tipo, int nEntrantes,
+            List<Arco> salientes) {
+        boolean esInicio = esEvento(nodo, TipoEvento.INICIO) || esEvento(nodo, TipoEvento.MENSAJE_RECEPCION_INICIO);
+        if (nEntrantes == 0 && !esInicio) {
+            items.add(item(ADVERTENCIA, tipo, nodo.getId(), "'" + nodo.getNombre() + "' no tiene camino de entrada"));
+        }
+        if (salientes.isEmpty() && !esEvento(nodo, TipoEvento.FIN)) {
+            items.add(item(ADVERTENCIA, tipo, nodo.getId(), "'" + nodo.getNombre() + "' no tiene camino de salida"));
+        }
+    }
+
+    // HU-27: los Message Catch se revisan despues contra los mensajes; el de inicio no tiene arcos entrantes
+    private void validarEventoDeRecepcion(List<AdvertenciaResponse> items, Evento evento, int nEntrantes,
+            List<Evento> recepciones) {
+        boolean inicio = evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INICIO;
+        if (inicio || evento.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INTERMEDIO) {
+            recepciones.add(evento);
+        }
+        if (inicio && nEntrantes > 0) {
+            items.add(item(ERROR, "EVENTO", evento.getId(),
+                    "El Message Catch de inicio '" + evento.getNombre() + "' no puede tener arcos entrantes"));
+        }
+    }
+
+    // ---------- Gateways ----------
+
     private void validarGateway(List<AdvertenciaResponse> items, Gateway gateway, int nEntrantes, List<Arco> salientes) {
         // HU-14: un gateway de divergencia tiene al menos dos arcos salientes (o es de convergencia)
         boolean convergencia = nEntrantes >= 2 && salientes.size() == 1;
@@ -128,95 +139,122 @@ public class ValidacionService {
             items.add(item(ERROR, "GATEWAY", gateway.getId(),
                     "El gateway '" + gateway.getNombre() + "' debe tener al menos dos arcos salientes"));
         }
-        // HU-14: en un gateway exclusivo o inclusivo cada arco saliente lleva una condicion
         boolean condicional = gateway.getTipoGateway() == TipoGateway.EXCLUSIVA
                 || gateway.getTipoGateway() == TipoGateway.INCLUSIVA;
         if (condicional && salientes.size() >= 2) {
-            for (Arco arco : salientes) {
-                if (arco.getCondicion() == null || arco.getCondicion().isBlank()) {
-                    items.add(item(ERROR, "ARCO", arco.getId(),
-                            "El arco " + arco.getId() + " que sale del gateway '" + gateway.getNombre()
-                                    + "' debe tener una condicion"));
-                }
-            }
+            validarCondiciones(items, gateway, salientes);
         }
-        // HU-15: en un exclusivo las condiciones deben excluirse entre si (aqui se detectan las repetidas)
         if (gateway.getTipoGateway() == TipoGateway.EXCLUSIVA) {
-            Map<String, Integer> vistas = new HashMap<>();
-            for (Arco arco : salientes) {
-                if (arco.getCondicion() != null && !arco.getCondicion().isBlank()) {
-                    vistas.merge(arco.getCondicion().trim().toLowerCase(), 1, Integer::sum);
-                }
-            }
-            if (vistas.values().stream().anyMatch(n -> n > 1)) {
-                items.add(item(ADVERTENCIA, "GATEWAY", gateway.getId(),
-                        "El gateway exclusivo '" + gateway.getNombre() + "' tiene condiciones repetidas: no son mutuamente excluyentes"));
+            validarCondicionesRepetidas(items, gateway, salientes);
+        }
+    }
+
+    // HU-14: en un gateway exclusivo o inclusivo cada arco saliente lleva una condicion
+    private void validarCondiciones(List<AdvertenciaResponse> items, Gateway gateway, List<Arco> salientes) {
+        for (Arco arco : salientes) {
+            if (vacio(arco.getCondicion())) {
+                items.add(item(ERROR, "ARCO", arco.getId(), "El arco " + arco.getId() + " que sale del gateway '"
+                        + gateway.getNombre() + "' debe tener una condicion"));
             }
         }
     }
 
-    private void validarMensajes(List<AdvertenciaResponse> items, Proceso proceso, List<Pool> pools, List<Evento> recepciones) {
+    // HU-15: en un exclusivo las condiciones deben excluirse entre si (aqui se detectan las repetidas)
+    private void validarCondicionesRepetidas(List<AdvertenciaResponse> items, Gateway gateway, List<Arco> salientes) {
+        Map<String, Integer> vistas = new HashMap<>();
+        salientes.stream()
+                .filter(arco -> !vacio(arco.getCondicion()))
+                .forEach(arco -> vistas.merge(arco.getCondicion().trim().toLowerCase(), 1, Integer::sum));
+        if (vistas.values().stream().anyMatch(n -> n > 1)) {
+            items.add(item(ADVERTENCIA, "GATEWAY", gateway.getId(), "El gateway exclusivo '" + gateway.getNombre()
+                    + "' tiene condiciones repetidas: no son mutuamente excluyentes"));
+        }
+    }
+
+    // ---------- Mensajes entre pools ----------
+
+    private void validarMensajes(List<AdvertenciaResponse> items, Proceso proceso, List<Evento> recepciones) {
         List<Mensaje> mensajes = mensajeRepository.findByProcesoId(proceso.getId());
         Map<Integer, Correlacion> correlaciones = new HashMap<>();
         Map<String, Integer> nombreYClave = new HashMap<>();
         for (Mensaje m : mensajes) {
-            Correlacion c = correlacionRepository.findByMensajeId(m.getId()).orElse(null);
-            if (c != null) {
+            correlacionRepository.findByMensajeId(m.getId()).ifPresent(c -> {
                 correlaciones.put(m.getId(), c);
                 nombreYClave.merge(clave(m.getNombre(), c.getCriterio()), 1, Integer::sum);
-            }
+            });
         }
-
         for (Mensaje m : mensajes) {
-            Correlacion c = correlaciones.get(m.getId());
-            // HU-25: el nombre del mensaje debe corresponder a un Message Catch del pool destino
-            boolean destinoInterno = m.getDestinoPool().getTipoParticipante() == TipoParticipante.EMPRESA_PROPIETARIA;
-            boolean hayReceptor = recepciones.stream().anyMatch(e -> e.getPool().getId().equals(m.getDestinoPool().getId())
-                    && mismoNombre(e.getNombre(), m.getNombre()));
-            if (destinoInterno && !hayReceptor) {
-                items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
-                        "El mensaje '" + m.getNombre() + "' queda sin receptor en el pool '" + m.getDestinoPool().getNombre() + "'"));
-            }
-            // HU-26: si deriva a manejo de error, la actividad de error debe seguir existiendo
-            if (m.getAccionFallo() == AccionFallo.DERIVAR_A_MANEJO_ERROR && m.getActividadError() == null) {
-                items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
-                        "El mensaje '" + m.getNombre() + "' deriva a manejo de error pero no tiene actividad de error"));
-            }
-            // HU-28: cada mensaje declara una clave de correlacion
-            if (c == null) {
-                items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
-                        "El mensaje '" + m.getNombre() + "' no tiene clave de correlacion"));
-            } else if (nombreYClave.get(clave(m.getNombre(), c.getCriterio())) > 1) {
-                // HU-28: dos mensajes con el mismo nombre y la misma clave son ambiguos
-                items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
-                        "El mensaje '" + m.getNombre() + "' es ambiguo: otro mensaje comparte su nombre y su clave de correlacion"));
-            }
+            validarMensaje(items, m, correlaciones.get(m.getId()), nombreYClave, recepciones);
         }
-
         for (Evento e : recepciones) {
-            List<Mensaje> lanzados = mensajes.stream().filter(m -> mismoNombre(m.getNombre(), e.getNombre())).toList();
-            // HU-27: debe existir un Message Throw con ese nombre o estar marcado como de origen externo
-            if (lanzados.isEmpty() && !Boolean.TRUE.equals(e.getOrigenExterno())) {
-                items.add(item(ADVERTENCIA, "EVENTO", e.getId(),
-                        "No existe un mensaje lanzado con el nombre '" + e.getNombre()
-                                + "' ni se marco el evento como de origen externo"));
-            }
-            boolean sinClave = e.getClaveCorrelacion() == null || e.getClaveCorrelacion().isBlank();
-            // HU-28: un Message Catch intermedio sin clave de correlacion
-            if (e.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INTERMEDIO && sinClave) {
+            validarRecepcion(items, e, mensajes, correlaciones);
+        }
+    }
+
+    private void validarMensaje(List<AdvertenciaResponse> items, Mensaje m, Correlacion c,
+            Map<String, Integer> nombreYClave, List<Evento> recepciones) {
+        // HU-25: el nombre del mensaje debe corresponder a un Message Catch del pool destino
+        boolean destinoInterno = m.getDestinoPool().getTipoParticipante() == TipoParticipante.EMPRESA_PROPIETARIA;
+        if (destinoInterno && !hayReceptor(m, recepciones)) {
+            items.add(item(ADVERTENCIA, "MENSAJE", m.getId(), "El mensaje '" + m.getNombre()
+                    + "' queda sin receptor en el pool '" + m.getDestinoPool().getNombre() + "'"));
+        }
+        // HU-26: si deriva a manejo de error, la actividad de error debe seguir existiendo
+        if (m.getAccionFallo() == AccionFallo.DERIVAR_A_MANEJO_ERROR && m.getActividadError() == null) {
+            items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
+                    "El mensaje '" + m.getNombre() + "' deriva a manejo de error pero no tiene actividad de error"));
+        }
+        // HU-28: cada mensaje declara una clave de correlacion, y no la comparte con otro mensaje del mismo nombre
+        if (c == null) {
+            items.add(item(ADVERTENCIA, "MENSAJE", m.getId(),
+                    "El mensaje '" + m.getNombre() + "' no tiene clave de correlacion"));
+        } else if (nombreYClave.get(clave(m.getNombre(), c.getCriterio())) > 1) {
+            items.add(item(ADVERTENCIA, "MENSAJE", m.getId(), "El mensaje '" + m.getNombre()
+                    + "' es ambiguo: otro mensaje comparte su nombre y su clave de correlacion"));
+        }
+    }
+
+    private boolean hayReceptor(Mensaje m, List<Evento> recepciones) {
+        return recepciones.stream().anyMatch(e -> e.getPool().getId().equals(m.getDestinoPool().getId())
+                && mismoNombre(e.getNombre(), m.getNombre()));
+    }
+
+    private void validarRecepcion(List<AdvertenciaResponse> items, Evento e, List<Mensaje> mensajes,
+            Map<Integer, Correlacion> correlaciones) {
+        List<Mensaje> lanzados = mensajes.stream().filter(m -> mismoNombre(m.getNombre(), e.getNombre())).toList();
+        // HU-27: debe existir un Message Throw con ese nombre o estar marcado como de origen externo
+        if (lanzados.isEmpty() && !Boolean.TRUE.equals(e.getOrigenExterno())) {
+            items.add(item(ADVERTENCIA, "EVENTO", e.getId(), "No existe un mensaje lanzado con el nombre '"
+                    + e.getNombre() + "' ni se marco el evento como de origen externo"));
+        }
+        // HU-28: un Message Catch intermedio sin clave de correlacion
+        if (vacio(e.getClaveCorrelacion())) {
+            if (e.getTipoEvento() == TipoEvento.MENSAJE_RECEPCION_INTERMEDIO) {
                 items.add(item(ADVERTENCIA, "EVENTO", e.getId(),
                         "El Message Catch intermedio '" + e.getNombre() + "' no tiene clave de correlacion"));
             }
-            // HU-28: la clave debe ser la misma en el lanzamiento y en la recepcion
-            for (Mensaje m : lanzados) {
-                Correlacion c = correlaciones.get(m.getId());
-                if (c != null && !sinClave && c.getCriterio() != null && !c.getCriterio().trim().equalsIgnoreCase(e.getClaveCorrelacion().trim())) {
-                    items.add(item(ADVERTENCIA, "EVENTO", e.getId(),
-                            "La clave de correlacion de '" + e.getNombre() + "' (" + e.getClaveCorrelacion()
-                                    + ") no coincide con la del mensaje lanzado (" + c.getCriterio() + ")"));
-                }
+            return;
+        }
+        // HU-28: la clave debe ser la misma en el lanzamiento y en la recepcion
+        for (Mensaje m : lanzados) {
+            Correlacion c = correlaciones.get(m.getId());
+            if (c != null && c.getCriterio() != null
+                    && !c.getCriterio().trim().equalsIgnoreCase(e.getClaveCorrelacion().trim())) {
+                items.add(item(ADVERTENCIA, "EVENTO", e.getId(), "La clave de correlacion de '" + e.getNombre()
+                        + "' (" + e.getClaveCorrelacion() + ") no coincide con la del mensaje lanzado ("
+                        + c.getCriterio() + ")"));
             }
         }
+    }
+
+    // ---------- Apoyo ----------
+
+    private boolean esEvento(NodoFlujo nodo, TipoEvento tipo) {
+        return nodo instanceof Evento evento && evento.getTipoEvento() == tipo;
+    }
+
+    private boolean vacio(String valor) {
+        return valor == null || valor.isBlank();
     }
 
     private String tipoDe(NodoFlujo nodo) {

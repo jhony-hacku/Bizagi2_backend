@@ -58,26 +58,22 @@ public class NodoFlujoService {
 
     // ---------- Consultas ----------
 
-    @Transactional(readOnly = true)
     public List<Actividad> listarActividades(Integer poolId, Integer empresaId) {
         poolService.buscarPorId(poolId, empresaId);
         return nodoFlujoRepository.findActividadesByPool(poolId);
     }
 
-    @Transactional(readOnly = true)
     public List<Gateway> listarGateways(Integer poolId, Integer empresaId) {
         poolService.buscarPorId(poolId, empresaId);
         return nodoFlujoRepository.findGatewaysByPool(poolId);
     }
 
-    @Transactional(readOnly = true)
     public List<Evento> listarEventos(Integer poolId, Integer empresaId) {
         poolService.buscarPorId(poolId, empresaId);
         return nodoFlujoRepository.findEventosByPool(poolId);
     }
 
     // Cualquier nodo de la empresa; lo usan los arcos y los mensajes
-    @Transactional(readOnly = true)
     public NodoFlujo buscarNodo(Integer id, Integer empresaId) {
         NodoFlujo nodo = nodoFlujoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Elemento no encontrado"));
@@ -87,7 +83,6 @@ public class NodoFlujoService {
         return nodo;
     }
 
-    @Transactional(readOnly = true)
     public Actividad buscarActividad(Integer id, Integer empresaId) {
         if (buscarNodo(id, empresaId) instanceof Actividad actividad) {
             return actividad;
@@ -95,7 +90,6 @@ public class NodoFlujoService {
         throw new RecursoNoEncontradoException("Actividad no encontrada");
     }
 
-    @Transactional(readOnly = true)
     public Gateway buscarGateway(Integer id, Integer empresaId) {
         if (buscarNodo(id, empresaId) instanceof Gateway gateway) {
             return gateway;
@@ -103,7 +97,6 @@ public class NodoFlujoService {
         throw new RecursoNoEncontradoException("Gateway no encontrado");
     }
 
-    @Transactional(readOnly = true)
     public Evento buscarEvento(Integer id, Integer empresaId) {
         if (buscarNodo(id, empresaId) instanceof Evento evento) {
             return evento;

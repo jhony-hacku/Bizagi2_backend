@@ -39,13 +39,11 @@ public class PoolService {
     private final HistorialService historialService;
     private final ModelMapper modelMapper;
 
-    @Transactional(readOnly = true)
     public List<Pool> listarPorProceso(Integer procesoId, Integer empresaId) {
         procesoService.buscarPorId(procesoId, empresaId);
         return poolRepository.findByProcesoId(procesoId);
     }
 
-    @Transactional(readOnly = true)
     public Pool buscarPorId(Integer id, Integer empresaId) {
         Pool pool = poolRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Pool no encontrado"));

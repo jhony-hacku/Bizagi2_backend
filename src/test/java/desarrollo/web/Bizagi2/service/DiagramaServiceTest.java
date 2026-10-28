@@ -168,9 +168,9 @@ class DiagramaServiceTest {
 
         DiagramaResponse diagrama = diagramaService.obtener(10, 1);
 
-        DiagramaLaneResponse lane = diagrama.getPools().get(0).getLanes().get(0);
-        assertThat(lane.getRolProcesoId()).isNull();
-        assertThat(lane.getRolProceso()).isNull();
+        DiagramaLaneResponse laneCompartida = diagrama.getPools().get(0).getLanes().get(0);
+        assertThat(laneCompartida.getRolProcesoId()).isNull();
+        assertThat(laneCompartida.getRolProceso()).isNull();
         assertThat(diagrama.getProceso().isPropio()).isFalse();
     }
 }

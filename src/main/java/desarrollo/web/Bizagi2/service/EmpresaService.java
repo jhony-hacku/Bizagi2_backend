@@ -39,7 +39,6 @@ public class EmpresaService {
         return empresaRepository.save(empresa);
     }
 
-    @Transactional(readOnly = true)
     public Empresa buscarPorId(Integer id) {
         return empresaRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Empresa no encontrada"));

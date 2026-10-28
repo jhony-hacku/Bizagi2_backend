@@ -39,13 +39,11 @@ public class ArcoService {
     private final ValidacionService validacionService;
     private final ModelMapper modelMapper;
 
-    @Transactional(readOnly = true)
     public List<Arco> listarPorPool(Integer poolId, Integer empresaId) {
         poolService.buscarPorId(poolId, empresaId);
         return arcoRepository.findByPoolId(poolId);
     }
 
-    @Transactional(readOnly = true)
     public Arco buscarPorId(Integer id, Integer empresaId) {
         Arco arco = arcoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Arco no encontrado"));

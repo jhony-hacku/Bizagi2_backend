@@ -37,13 +37,11 @@ public class LaneService {
     private final HistorialService historialService;
     private final ModelMapper modelMapper;
 
-    @Transactional(readOnly = true)
     public List<Lane> listarPorPool(Integer poolId, Integer empresaId) {
         poolService.buscarPorId(poolId, empresaId);
         return laneRepository.findByPoolIdOrderByOrdenAscIdAsc(poolId);
     }
 
-    @Transactional(readOnly = true)
     public Lane buscarPorId(Integer id, Integer empresaId) {
         Lane lane = laneRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Lane no encontrada"));
