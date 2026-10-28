@@ -4,12 +4,20 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.nodo.ActividadCreateRequest;
+import desarrollo.web.Bizagi2.dto.nodo.ActividadResponse;
+import desarrollo.web.Bizagi2.dto.nodo.ActividadUpdateRequest;
+import desarrollo.web.Bizagi2.dto.nodo.EventoRequest;
+import desarrollo.web.Bizagi2.dto.nodo.EventoResponse;
+import desarrollo.web.Bizagi2.dto.nodo.GatewayRequest;
+import desarrollo.web.Bizagi2.dto.nodo.GatewayResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Arco;
@@ -46,6 +54,7 @@ public class NodoFlujoService {
     private final ProcesoService procesoService;
     private final HistorialService historialService;
     private final ValidacionService validacionService;
+    private final ModelMapper modelMapper;
 
     // ---------- Consultas ----------
 
@@ -155,7 +164,7 @@ public class NodoFlujoService {
     }
 
     // Se eliminan (logicamente) tambien los arcos y mensajes conectados a la actividad
-    public Map<String, Object> eliminarActividad(Integer id, Usuario usuario) {
+    public EliminacionResponse eliminarActividad(Integer id, Usuario usuario) {
         return eliminarNodo(buscarActividad(id, usuario.getEmpresa().getId()), usuario, "ACTIVIDAD");
     }
 
@@ -202,7 +211,7 @@ public class NodoFlujoService {
         return gateway;
     }
 
-    public Map<String, Object> eliminarGateway(Integer id, Usuario usuario) {
+    public EliminacionResponse eliminarGateway(Integer id, Usuario usuario) {
         return eliminarNodo(buscarGateway(id, usuario.getEmpresa().getId()), usuario, "GATEWAY");
     }
 
@@ -250,7 +259,7 @@ public class NodoFlujoService {
         return evento;
     }
 
-    public Map<String, Object> eliminarEvento(Integer id, Usuario usuario) {
+    public EliminacionResponse eliminarEvento(Integer id, Usuario usuario) {
         return eliminarNodo(buscarEvento(id, usuario.getEmpresa().getId()), usuario, "EVENTO");
     }
 
@@ -293,7 +302,7 @@ public class NodoFlujoService {
 
     // HU-10 y HU-16: eliminacion logica; tambien se eliminan los arcos (y los mensajes que salen) del nodo.
     // Devuelve que se elimino y las advertencias que deja el diagrama.
-    private Map<String, Object> eliminarNodo(NodoFlujo nodo, Usuario usuario, String tipo) {
+    private EliminacionResponse eliminarNodo(NodoFlujo nodo, Usuario usuario, String tipo) {
         Proceso proceso = procesoService.buscarActivo(nodo.getPool().getProceso().getId(), usuario.getEmpresa().getId());
         Integer id = nodo.getId();
 
@@ -316,5 +325,68 @@ public class NodoFlujoService {
         historialService.registrar(usuario, proceso, AccionHistorial.ELIMINAR, tipo, id,
                 "'" + nodo.getNombre() + "' eliminado");
         return validacionService.resultadoEliminacion(proceso, arcos.size(), mensajes.size());
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+
+    @Transactional(readOnly = true)
+    public List<ActividadResponse> listarActividadesDto(Integer poolId, Integer empresaId) {
+        return listarActividades(poolId, empresaId).stream().map(a -> modelMapper.map(a, ActividadResponse.class)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ActividadResponse buscarActividadDto(Integer id, Integer empresaId) {
+        return modelMapper.map(buscarActividad(id, empresaId), ActividadResponse.class);
+    }
+
+    public ActividadResponse crearActividad(Integer laneId, Usuario usuario, ActividadCreateRequest datos) {
+        Actividad creada = crearActividad(laneId, usuario, modelMapper.map(datos, Actividad.class));
+        return modelMapper.map(creada, ActividadResponse.class);
+    }
+
+    // laneId del DTO llega como actividad.lane.id
+    public ActividadResponse actualizarActividad(Integer id, Usuario usuario, ActividadUpdateRequest datos) {
+        Actividad actualizada = actualizarActividad(id, usuario, modelMapper.map(datos, Actividad.class));
+        return modelMapper.map(actualizada, ActividadResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<GatewayResponse> listarGatewaysDto(Integer poolId, Integer empresaId) {
+        return listarGateways(poolId, empresaId).stream().map(g -> modelMapper.map(g, GatewayResponse.class)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public GatewayResponse buscarGatewayDto(Integer id, Integer empresaId) {
+        return modelMapper.map(buscarGateway(id, empresaId), GatewayResponse.class);
+    }
+
+    public GatewayResponse crearGateway(Integer poolId, Usuario usuario, GatewayRequest datos) {
+        Gateway creado = crearGateway(poolId, usuario, modelMapper.map(datos, Gateway.class));
+        return modelMapper.map(creado, GatewayResponse.class);
+    }
+
+    public GatewayResponse actualizarGateway(Integer id, Usuario usuario, GatewayRequest datos) {
+        Gateway actualizado = actualizarGateway(id, usuario, modelMapper.map(datos, Gateway.class));
+        return modelMapper.map(actualizado, GatewayResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventoResponse> listarEventosDto(Integer poolId, Integer empresaId) {
+        return listarEventos(poolId, empresaId).stream().map(e -> modelMapper.map(e, EventoResponse.class)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EventoResponse buscarEventoDto(Integer id, Integer empresaId) {
+        return modelMapper.map(buscarEvento(id, empresaId), EventoResponse.class);
+    }
+
+    public EventoResponse crearEvento(Integer poolId, Usuario usuario, EventoRequest datos) {
+        Evento creado = crearEvento(poolId, usuario, modelMapper.map(datos, Evento.class));
+        return modelMapper.map(creado, EventoResponse.class);
+    }
+
+    public EventoResponse actualizarEvento(Integer id, Usuario usuario, EventoRequest datos) {
+        Evento actualizado = actualizarEvento(id, usuario, modelMapper.map(datos, Evento.class));
+        return modelMapper.map(actualizado, EventoResponse.class);
     }
 }

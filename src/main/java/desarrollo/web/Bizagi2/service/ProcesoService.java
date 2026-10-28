@@ -4,15 +4,19 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.proceso.AdvertenciaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.HistorialResponse;
+import desarrollo.web.Bizagi2.dto.proceso.ProcesoRequest;
+import desarrollo.web.Bizagi2.dto.proceso.ProcesoResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.EstadoProceso;
 import desarrollo.web.Bizagi2.entities.Historial;
@@ -40,6 +44,7 @@ public class ProcesoService {
     private final ProcesoCompartidoRepository procesoCompartidoRepository;
     private final HistorialService historialService;
     private final ValidacionService validacionService;
+    private final ModelMapper modelMapper;
 
     // HU-07: listado paginado con busqueda por nombre y filtros por estado y categoria.
     // Por defecto solo los procesos activos; con activo=false se consultan los eliminados (HU-06).
@@ -178,7 +183,7 @@ public class ProcesoService {
 
     // Advertencias y errores del diagrama (lo que el editor le avisa al usuario)
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> validar(Integer id, Integer empresaId) {
+    public List<AdvertenciaResponse> validar(Integer id, Integer empresaId) {
         return validacionService.validar(buscarPorId(id, empresaId));
     }
 
@@ -191,5 +196,36 @@ public class ProcesoService {
     // Recorta espacios y trata el texto vacio como "no enviado"
     private String texto(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();
+    }
+
+    // ---------- Frontera con el controlador: entra y sale DTO, nunca la entidad ----------
+    // La logica de negocio vive en los metodos de arriba; estos solo convierten con ModelMapper.
+
+    public ProcesoResponse aResponse(Proceso proceso) {
+        return modelMapper.map(proceso, ProcesoResponse.class);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ProcesoResponse> listarDto(Integer empresaId, String nombre, EstadoProceso estado, String categoria,
+            boolean activo, int pagina, int tamano) {
+        return listar(empresaId, nombre, estado, categoria, activo, pagina, tamano).map(this::aResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public ProcesoResponse buscarParaLecturaDto(Integer id, Integer empresaId) {
+        return aResponse(buscarParaLectura(id, empresaId));
+    }
+
+    public ProcesoResponse crear(Usuario usuario, ProcesoRequest datos) {
+        return aResponse(crear(usuario, modelMapper.map(datos, Proceso.class)));
+    }
+
+    public ProcesoResponse actualizar(Integer id, Usuario usuario, ProcesoRequest datos) {
+        return aResponse(actualizar(id, usuario, modelMapper.map(datos, Proceso.class)));
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistorialResponse> historialDto(Integer id, Integer empresaId) {
+        return historial(id, empresaId).stream().map(h -> modelMapper.map(h, HistorialResponse.class)).toList();
     }
 }
