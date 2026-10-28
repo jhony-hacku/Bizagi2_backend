@@ -12,15 +12,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Permiso minimo para todo el workflow; cada job pide solo lo que necesita
 permissions:
   contents: read
-  checks: write   # necesario para que dorny/test-reporter publique el resultado
 
 jobs:
   build-test-sonar:
     name: Build, Test & Sonar
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write   # necesario para que dorny/test-reporter publique el resultado
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
