@@ -24,7 +24,8 @@ public class AuthService {
     private final JwtService jwtService;
 
     // HU-01: registra una empresa nueva junto con su usuario administrador inicial.
-    // Primero se validan todos los campos obligatorios y luego se crea todo; si algo falla
+    // Primero se validan todos los campos obligatorios y luego se crea todo.
+    // si algo falla
     // (NIT o email repetido...) no queda nada a medias.
     public AuthResponse registrar(RegistroRequest datos) {
         requerido(datos.getNombreEmpresa(), "nombreEmpresa");
