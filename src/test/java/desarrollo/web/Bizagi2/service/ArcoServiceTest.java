@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Arco;
@@ -186,9 +186,9 @@ class ArcoServiceTest {
 
         when(arcoRepository.findById(500)).thenReturn(Optional.of(arco));
         when(procesoService.buscarActivo(20, 1)).thenReturn(proceso);
-        when(validacionService.resultadoEliminacion(proceso, 1, 0)).thenReturn(Map.of("advertencias", List.of()));
+        when(validacionService.resultadoEliminacion(proceso, 1, 0)).thenReturn(new EliminacionResponse(1, 0, List.of()));
 
-        Map<String, Object> res = arcoService.eliminar(500, usuario);
+        EliminacionResponse res = arcoService.eliminar(500, usuario);
 
         assertThat(arco.isActivo()).isFalse();
         verify(arcoRepository).save(arco);
