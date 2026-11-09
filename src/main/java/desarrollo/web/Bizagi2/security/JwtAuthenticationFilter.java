@@ -19,8 +19,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
-// Lee el header "Authorization: Bearer <token>", valida el token y deja al Usuario
+// Lee el header "Authorization: Bearer <access token>", valida el token y deja al Usuario
 // (cargado de la BD) como usuario autenticado. Asi el rol y la empresa siempre son los actuales.
+// Solo acepta access tokens: un refresh token en este header se rechaza.
 // El token deja de servir si el usuario fue desactivado o si cerro sesion (cambia su version).
 @Component
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             try {
-                Claims claims = jwtService.leerClaims(header.substring(7));
+                Claims claims = jwtService.leerAccessClaims(header.substring(7));
                 Integer usuarioId = Integer.valueOf(claims.getSubject());
                 Integer version = claims.get("v", Integer.class);
                 Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);

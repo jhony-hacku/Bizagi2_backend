@@ -27,8 +27,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(restAuthenticationEntryPoint)
                         .accessDeniedHandler(restAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        // Publico: registro, login, documentacion y consola H2 (perfil dev)
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/v3/api-docs/**",
+                        // Publico: registro, login, renovacion (la protege la cookie del refresh token),
+                        // documentacion y consola H2 (perfil dev)
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html", "/h2-console/**").permitAll()
                         // Cerrar sesion: cualquier usuario autenticado, sea cual sea su rol
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()

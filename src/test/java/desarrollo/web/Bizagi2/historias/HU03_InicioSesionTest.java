@@ -25,6 +25,7 @@ import desarrollo.web.Bizagi2.repository.UsuarioRepository;
 import desarrollo.web.Bizagi2.security.JwtService;
 import desarrollo.web.Bizagi2.service.AuthService;
 import desarrollo.web.Bizagi2.service.EmpresaService;
+import desarrollo.web.Bizagi2.service.RefreshTokenService;
 import desarrollo.web.Bizagi2.service.UsuarioService;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +43,9 @@ class HU03_InicioSesionTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -68,7 +72,7 @@ class HU03_InicioSesionTest {
     @Test
     @DisplayName("CA3: Login devuelve token JWT y asocia explícitamente el usuario con su empresa")
     void ca3_login_retornaTokenYDatosEmpresa() {
-        AuthService authService = new AuthService(empresaService, usuarioService, jwtService);
+        AuthService authService = new AuthService(empresaService, usuarioService, jwtService, refreshTokenService);
 
         Empresa empresa = new Empresa();
         empresa.setId(5);
@@ -85,10 +89,13 @@ class HU03_InicioSesionTest {
 
         when(usuarioRepository.findByEmail("laura@logistica.com")).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("ClaveSecreta1", "$2a$10$encoded")).thenReturn(true);
-        when(jwtService.generarToken(usuario)).thenReturn("jwt.token.valido");
+        when(jwtService.generarAccessToken(usuario)).thenReturn("jwt.token.valido");
+        when(refreshTokenService.iniciarFamilia(usuario)).thenReturn("refresh.token.valido");
 
-        Map<String, Object> respuesta = authService.login("laura@logistica.com", "ClaveSecreta1");
+        AuthService.Sesion sesion = authService.login("laura@logistica.com", "ClaveSecreta1");
+        Map<String, Object> respuesta = sesion.cuerpo();
 
+        assertThat(sesion.refreshToken()).isEqualTo("refresh.token.valido");
         assertThat(respuesta).isNotNull();
         assertThat(respuesta.get("token")).isEqualTo("jwt.token.valido");
         assertThat(respuesta.get("usuarioId")).isEqualTo(12);

@@ -3,6 +3,7 @@ package desarrollo.web.Bizagi2.security;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -11,45 +12,110 @@ import org.springframework.stereotype.Service;
 
 import desarrollo.web.Bizagi2.entities.Usuario;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
+// Emite y valida los dos tokens de la sesion:
+//  - ACCESS  (corto, minutos): va en "Authorization: Bearer" y autoriza cada peticion.
+//  - REFRESH (largo, dias):    solo sirve para pedir un access nuevo en POST /api/auth/refresh.
+// Los dos llevan el claim "tipo" para que uno nunca se pueda usar en lugar del otro.
 @Service
 public class JwtService {
 
+    public static final String TIPO_ACCESS = "access";
+    public static final String TIPO_REFRESH = "refresh";
+
+    private static final String ISSUER = "bizagi2";
+    private static final String CLAIM_TIPO = "tipo";
+    private static final String CLAIM_FAMILIA = "fam";
+    private static final String CLAIM_VERSION = "v";
+
     private final SecretKey secretKey;
-    private final long expirationMs;
+    private final long accessExpirationMs;
+    private final long refreshExpirationMs;
 
     public JwtService(
             @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration-ms}") long expirationMs) {
+            @Value("${jwt.access-expiration-ms}") long accessExpirationMs,
+            @Value("${jwt.refresh-expiration-ms}") long refreshExpirationMs) {
         if (secret == null || secret.length() < 32) {
             throw new IllegalArgumentException("JWT_SECRET debe tener al menos 32 caracteres");
         }
+        if (accessExpirationMs <= 0 || refreshExpirationMs <= accessExpirationMs) {
+            throw new IllegalArgumentException(
+                    "La duracion del refresh token debe ser mayor que la del access token");
+        }
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+        this.accessExpirationMs = accessExpirationMs;
+        this.refreshExpirationMs = refreshExpirationMs;
     }
 
-    public String generarToken(Usuario usuario) {
+    // Token corto: lleva los datos que el frontend necesita para pintar la sesion (rol, empresa).
+    // El rol y la empresa que se aplican de verdad se leen de la BD en cada peticion (ver el filtro).
+    public String generarAccessToken(Usuario usuario) {
         Instant ahora = Instant.now();
         return Jwts.builder()
+                .issuer(ISSUER)
                 .subject(String.valueOf(usuario.getId()))
+                .claim(CLAIM_TIPO, TIPO_ACCESS)
                 .claim("email", usuario.getEmail())
                 .claim("rol", usuario.getRolAcceso().name())
                 .claim("empresaId", usuario.getEmpresa().getId())
-                .claim("v", usuario.getVersionSesion())
+                .claim(CLAIM_VERSION, usuario.getVersionSesion())
                 .issuedAt(Date.from(ahora))
-                .expiration(Date.from(ahora.plusMillis(expirationMs)))
+                .expiration(Date.from(ahora.plusMillis(accessExpirationMs)))
                 .signWith(secretKey)
                 .compact();
     }
 
-    // Lanza JwtException si el token esta mal firmado o vencido
-    public Claims leerClaims(String token) {
-        return Jwts.parser()
+    // Token largo: minimo de datos (quien es, a que familia pertenece y su id unico "jti").
+    // El jti se guarda en la BD para poder rotarlo y revocarlo.
+    public RefreshEmitido generarRefreshToken(Usuario usuario, String familiaId) {
+        Instant ahora = Instant.now();
+        Instant expira = ahora.plusMillis(refreshExpirationMs);
+        String jti = UUID.randomUUID().toString();
+        String token = Jwts.builder()
+                .issuer(ISSUER)
+                .id(jti)
+                .subject(String.valueOf(usuario.getId()))
+                .claim(CLAIM_TIPO, TIPO_REFRESH)
+                .claim(CLAIM_FAMILIA, familiaId)
+                .claim(CLAIM_VERSION, usuario.getVersionSesion())
+                .issuedAt(Date.from(ahora))
+                .expiration(Date.from(expira))
+                .signWith(secretKey)
+                .compact();
+        return new RefreshEmitido(token, jti, ahora, expira);
+    }
+
+    // Lanza JwtException si el token esta mal firmado, vencido o no es un access token
+    public Claims leerAccessClaims(String token) {
+        return leer(token, TIPO_ACCESS);
+    }
+
+    // Lanza JwtException si el token esta mal firmado, vencido o no es un refresh token
+    public Claims leerRefreshClaims(String token) {
+        return leer(token, TIPO_REFRESH);
+    }
+
+    public long getAccessExpirationMs() {
+        return accessExpirationMs;
+    }
+
+    private Claims leer(String token, String tipoEsperado) {
+        Claims claims = Jwts.parser()
                 .verifyWith(secretKey)
+                .requireIssuer(ISSUER)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+        if (!tipoEsperado.equals(claims.get(CLAIM_TIPO, String.class))) {
+            throw new JwtException("Tipo de token incorrecto");
+        }
+        return claims;
+    }
+
+    public record RefreshEmitido(String token, String jti, Instant emitidoEn, Instant expiraEn) {
     }
 }

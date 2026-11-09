@@ -32,6 +32,8 @@ DB_PASSWORD=tu_password_de_postgres
 JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres
 ```
 
+La duracion de los tokens y la cookie del refresh token se configuran con `jwt.*` (ver [Autenticacion](#autenticacion-access-token-y-refresh-token)). En local por `http` la cookie Secure solo funciona en `localhost`; si tu navegador no la guarda, usa el perfil `dev`.
+
 Si falta el `.env`, la app no arranca y el error indica la variable que no se pudo resolver (por ejemplo `Could not resolve placeholder 'JWT_SECRET'`).
 
 ## Ejecutar
@@ -56,7 +58,7 @@ Sin PostgreSQL, con H2 en memoria (no necesita `.env`):
 
 La consola H2 queda en `http://localhost:8080/h2-console` con JDBC URL `jdbc:h2:mem:bizagi2`, usuario `sa` y contrasena vacia.
 
-Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`.
+Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`. El access token dura 15 minutos; cuando venza, `POST /api/auth/refresh` (el navegador envia solo la cookie) entrega uno nuevo.
 
 ### Ejecutar con Docker
 
@@ -91,11 +93,11 @@ docker compose up --build -d
 
 ## Endpoints
 
-Todos requieren el header `Authorization: Bearer <token>`, salvo `/api/auth/*`.
+Todos requieren el header `Authorization: Bearer <access token>`, salvo `/api/auth/register`, `/api/auth/login` y `/api/auth/refresh` (esta ultima se autentica con la cookie del refresh token).
 
 | Recurso | Rutas |
 |---|---|
-| Autenticacion | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| Autenticacion | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout` |
 | Empresa | `GET /api/empresa`, `PUT /api/empresa` |
 | Usuarios (solo ADMINISTRADOR, salvo `/me`) | `GET /api/usuarios/me`, `GET/POST /api/usuarios`, `GET/PUT/DELETE /api/usuarios/{id}` (DELETE desactiva), `PUT /api/usuarios/{id}/activar` |
 | Procesos | `GET /api/procesos?nombre=&estado=&categoria=&activo=&page=&size=`, `POST /api/procesos`, `GET/PUT/DELETE /api/procesos/{id}`, `GET /api/procesos/{id}/diagrama`, `GET /api/procesos/{id}/historial`, `GET /api/procesos/{id}/validacion` |
@@ -124,9 +126,17 @@ POST /api/auth/login
 { "email": "ana@acme.com", "password": "Clave12345" }
 ```
 
-Ambos responden con el `token` y los datos del usuario. El registro crea la empresa y su administrador inicial (todos los campos son obligatorios y el NIT es unico); los demas usuarios los crea el administrador con `POST /api/usuarios` indicando su correo, su contrasena inicial y su rol.
+Ambos responden con el access token (`token`, `tokenType`, `expiresIn` en segundos) y los datos del usuario, y dejan el refresh token en la cookie `refresh_token` (HttpOnly, nunca en el JSON). El registro crea la empresa y su administrador inicial (todos los campos son obligatorios y el NIT es unico); los demas usuarios los crea el administrador con `POST /api/usuarios` indicando su correo, su contrasena inicial y su rol.
 
-`POST /api/auth/logout` (con el token en el header) cierra la sesion: el token deja de servir y tambien los demas tokens que el usuario tuviera abiertos.
+```json
+{ "token": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 900,
+  "usuarioId": 1, "nombre": "Ana Perez", "email": "ana@acme.com",
+  "rolAcceso": "ADMINISTRADOR", "empresaId": 1, "empresa": "Acme SAS" }
+```
+
+`POST /api/auth/refresh` (sin cuerpo, con la cookie) responde igual que el login: access token nuevo y refresh token nuevo en la cookie. Si la cookie falta, vencio o ya fue usada responde `401` y borra la cookie: hay que volver a hacer login.
+
+`POST /api/auth/logout` (con el access token en el header) cierra la sesion: el access token deja de servir, se borran los refresh tokens del usuario y se limpia la cookie. Tambien se cierran las sesiones del usuario en otros dispositivos.
 
 ### Ejemplos de cuerpos
 
@@ -152,6 +162,55 @@ Valores validos: `tipoParticipante` = `EMPRESA_PROPIETARIA | CLIENTE | PROVEEDOR
 Obligatorios: actividad (`nombre`, `tipo`), gateway (`nombre`, `tipoGateway`), evento (`nombre`, `tipoEvento`), mensaje (`nombre`, `origen.id`, `destinoPool.id`, y `tipoDestino` si el destino es un `SISTEMA_EXTERNO`), correlacion (`criterio`, `accionSinCaso`), lane (`rolProceso.id`). Los `PUT` llevan el cuerpo completo, no solo el campo que cambia.
 
 Respuestas: los `DELETE` responden `204` sin cuerpo, salvo actividades, gateways, eventos y arcos, que responden `200` con `{ arcosEliminados, mensajesEliminados, advertencias }`. Para comprobar un borrado logico se consulta el recurso y se ve `activo: false` (procesos, usuarios) o `404` (elementos del diagrama y roles). `GET /api/procesos/{id}/validacion` devuelve una lista de `{ nivel, elemento, elementoId, mensaje }` con `nivel` = `ERROR | ADVERTENCIA`.
+
+## Autenticacion: access token y refresh token
+
+La sesion usa dos tokens JWT con funciones distintas. Ninguno reemplaza al otro: un claim `tipo` (`access` / `refresh`) hace que el servidor rechace uno cuando se presenta en lugar del otro.
+
+| | Access token (corto) | Refresh token (largo) |
+|---|---|---|
+| Duracion | 15 minutos (`jwt.access-expiration-ms`) | 7 dias (`jwt.refresh-expiration-ms`) |
+| Para que sirve | Autorizar cada peticion a la API | Obtener un access token nuevo sin pedir la contrasena otra vez |
+| Cuando se usa | En todas las rutas protegidas | Solo en `POST /api/auth/refresh`, cuando el access vencio (o esta por vencer) |
+| Donde viaja | Header `Authorization: Bearer` | Cookie `refresh_token`: HttpOnly, Secure, SameSite=Strict, ruta `/api/auth` |
+| Donde lo guarda el cliente | En memoria de la aplicacion (no en localStorage) | En ningun lado: lo administra el navegador y JavaScript no puede leerlo |
+| Que contiene | `sub`, `email`, `rol`, `empresaId`, `v`, `tipo`, `exp` | Solo `sub`, `jti`, `fam`, `v`, `tipo`, `exp` |
+| Estado en el servidor | Ninguno (se valida la firma); el filtro consulta al usuario en la BD | Tabla `refresh_tokens`: se puede rotar y revocar |
+
+**Por que dos tokens.** Un solo token tiene que elegir entre seguridad y comodidad: si dura poco, el usuario tendria que loguearse cada pocos minutos; si dura mucho, un token robado da acceso por mucho tiempo y no hay forma de retirarlo. El access token se envia en cada peticion (es el que mas se expone), por eso dura poco: si se filtra, sirve minutos. El refresh token casi no se envia (una vez cada 15 minutos y solo a una ruta), por eso puede durar dias, y como se guarda en la BD se puede revocar.
+
+**Flujo.**
+
+```text
+login ──► access (15 min, en el JSON) + refresh (7 dias, en cookie HttpOnly)
+peticiones ──► Authorization: Bearer <access>
+access vencido ──► 401 ──► POST /api/auth/refresh (cookie) ──► access nuevo + refresh nuevo ──► reintentar
+refresh vencido, usado o revocado ──► 401 ──► volver a hacer login
+logout ──► se revocan todos los refresh del usuario y se borra la cookie
+```
+
+**Practicas aplicadas.**
+
+- **Rotacion de un solo uso:** cada vez que se usa un refresh token se revoca y se entrega otro. La revocacion es un `UPDATE ... WHERE revocado = false` atomico, asi que dos peticiones simultaneas no pueden usar el mismo token.
+- **Deteccion de robo:** todos los refresh tokens de un mismo login forman una *familia*. Si llega uno ya usado (alguien lo copio y lo uso despues, o antes que el dueno), se revoca la familia entera y el usuario debe iniciar sesion. Esa revocacion se conserva aunque la peticion falle (`noRollbackFor`).
+- **Refresh token fuera del alcance de JavaScript:** cookie HttpOnly (un XSS no lo puede leer), Secure (solo HTTPS), SameSite=Strict (no se envia desde otros sitios, defensa CSRF) y limitada a `/api/auth` (no viaja en las demas peticiones). El access token en cambio va en el header, por lo que el resto de la API no es vulnerable a CSRF.
+- **Separacion de tipos:** el filtro solo acepta `tipo=access` y `/refresh` solo acepta `tipo=refresh`. Ademas se valida firma (HMAC-SHA), expiracion y emisor (`iss`).
+- **Datos minimos en el refresh token:** no lleva rol ni email; el rol y la empresa que se aplican en cada peticion salen siempre de la BD, asi un cambio de rol o una desactivacion tienen efecto de inmediato y no esperan a que venza el token.
+- **Revocacion centralizada:** `versionSesion` (claim `v`) viaja en ambos tokens. Al cerrar sesion o desactivar al usuario se incrementa y todos sus tokens dejan de servir; ademas el logout borra sus registros de `refresh_tokens`.
+- **Solo el `jti` en la BD:** la tabla guarda el id del token, no el token; quien lea la tabla no puede fabricar un refresh token porque no tiene la clave de firma.
+- **Respuestas con `Cache-Control: no-store`** en login, registro y refresh, y limpieza diaria (3:00) de los refresh tokens vencidos.
+- **Validacion de configuracion al arrancar:** el secreto debe tener al menos 32 caracteres y el refresh debe durar mas que el access.
+
+**Configuracion** (variables de entorno del perfil `prod`; los valores por defecto sirven para empezar):
+
+| Variable | Defecto | Significado |
+|---|---|---|
+| `JWT_SECRET` | (obligatoria) | Clave de firma, minimo 32 caracteres |
+| `JWT_ACCESS_EXPIRATION_MS` | `900000` (15 min) | Duracion del access token |
+| `JWT_REFRESH_EXPIRATION_MS` | `604800000` (7 dias) | Duracion del refresh token y de la cookie |
+| `JWT_REFRESH_COOKIE_SECURE` | `true` | Poner `false` solo para probar por `http` (el perfil `dev` y el `docker-compose.yml` ya lo hacen) |
+
+**Para el frontend.** Guardar el access token solo en memoria; llamar a la API con `credentials: 'include'` (o `withCredentials: true`) para que el navegador envie la cookie en `/api/auth/*`; al recibir un `401` en una ruta protegida llamar una vez a `/api/auth/refresh` y reintentar, y si el refresh tambien responde `401` llevar al usuario al login. Al recargar la pagina el access token se pierde: se recupera llamando a `/api/auth/refresh`. Si el frontend vive en otro origen hay que habilitar CORS con `allowCredentials` para ese origen y mantener `SameSite` acorde (con `Strict`, front y API deben compartir sitio, por ejemplo `app.empresa.com` y `api.empresa.com`).
 
 ## Reglas de negocio (en los servicios)
 
@@ -188,3 +247,5 @@ CREATE DATABASE bizagi2;
 ```
 
 La tabla `historial_procesos` de la version anterior ya no se usa (ahora es `historial`).
+
+Esta version agrega la tabla `refresh_tokens`. Con `ddl-auto=update` se crea sola; con el perfil `prod` (`validate`) hay que crearla antes de desplegar o arrancar una vez con `DDL_AUTO=update`. La propiedad `jwt.expiration-ms` se reemplazo por `jwt.access-expiration-ms` y `jwt.refresh-expiration-ms`.
