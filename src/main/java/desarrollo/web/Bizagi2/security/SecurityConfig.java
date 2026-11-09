@@ -2,11 +2,18 @@ package desarrollo.web.Bizagi2.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
+import jakarta.servlet.http.HttpServletRequest;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,10 +24,27 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
+    @Value("${jwt.refresh-cookie-secure:true}")
+    private boolean secureCookie;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        CookieCsrfTokenRepository csrfCookies = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfCookies.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Strict").secure(secureCookie));
+        var csrfHeader = new CsrfTokenRequestAttributeHandler() {
+            @Override
+            public String resolveCsrfTokenValue(HttpServletRequest request, CsrfToken token) {
+                return request.getHeader(token.getHeaderName());
+            }
+        };
         http
-                .csrf(csrf -> csrf.disable())
+                // Solo /auth usa cookies para autenticar. El resto de la API exige Bearer.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
+                        .csrfTokenRequestHandler(csrfHeader)
+                        // Cada Bearer autentica una peticion, no abre una nueva sesion de navegador.
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
+                        .requireCsrfProtectionMatcher(request -> request.getRequestURI().startsWith("/api/auth/")
+                                && !java.util.Set.of("GET", "HEAD", "OPTIONS").contains(request.getMethod())))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
@@ -29,10 +53,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Publico: registro, login, renovacion (la protege la cookie del refresh token),
                         // documentacion y consola H2 (perfil dev)
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/v3/api-docs/**",
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/csrf",
+                                "/api/auth/logout", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html", "/h2-console/**").permitAll()
-                        // Cerrar sesion: cualquier usuario autenticado, sea cual sea su rol
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
+                        // Logout valida access o refresh en el servicio; permite borrar una cookie vencida.
                         // Cualquier usuario autenticado puede ver su propio perfil
                         .requestMatchers(HttpMethod.GET, "/api/usuarios/me").authenticated()
                         // Solo el administrador gestiona colaboradores y los datos de la empresa
@@ -54,5 +78,12 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration() {
+        var registration = new FilterRegistrationBean<>(jwtAuthenticationFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 }

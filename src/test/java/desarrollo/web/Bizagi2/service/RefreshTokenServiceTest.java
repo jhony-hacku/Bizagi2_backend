@@ -58,14 +58,17 @@ class RefreshTokenServiceTest {
         usuario.setEmpresa(empresa);
         usuario.setActivo(true);
         usuario.setVersionSesion(2);
+        org.mockito.Mockito.lenient().when(usuarioRepository.buscarParaActualizar(7)).thenReturn(Optional.of(usuario));
     }
 
-    private RefreshToken registro(String jti, String familia, boolean revocado) {
+    private RefreshToken registro(String token, boolean revocado) {
+        Claims claims = jwtService.leerRefreshClaims(token);
         RefreshToken r = new RefreshToken();
-        r.setJti(jti);
-        r.setFamiliaId(familia);
+        r.setJti(claims.getId());
+        r.setFamiliaId(claims.get("fam", String.class));
         r.setUsuario(usuario);
         r.setRevocado(revocado);
+        r.setExpiraEn(claims.getExpiration().toInstant());
         return r;
     }
 
@@ -89,47 +92,47 @@ class RefreshTokenServiceTest {
     @Test
     @DisplayName("rotar: revoca el token usado y emite otro de la misma familia")
     void rotar_exito() {
-        String viejo = jwtService.generarRefreshToken(usuario, "fam-A").token();
+        String viejo = jwtService.generarRefreshToken(usuario, "b5ed63f5-31e3-5c3a-95ae-21dd88bcd621").token();
         String jtiViejo = jwtService.leerRefreshClaims(viejo).getId();
-        when(refreshTokenRepository.findByJti(jtiViejo)).thenReturn(Optional.of(registro(jtiViejo, "fam-A", false)));
+        when(refreshTokenRepository.findByJti(jtiViejo)).thenReturn(Optional.of(registro(viejo, false)));
         when(refreshTokenRepository.revocarSiVigente(jtiViejo)).thenReturn(1);
-        when(usuarioRepository.findById(7)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(7)).thenReturn(Optional.of(usuario));
 
         RefreshTokenService.Rotacion rotacion = service.rotar(viejo);
 
         assertThat(rotacion.usuario()).isSameAs(usuario);
         assertThat(rotacion.refreshToken()).isNotEqualTo(viejo);
         Claims nuevo = jwtService.leerRefreshClaims(rotacion.refreshToken());
-        assertThat(nuevo.get("fam", String.class)).isEqualTo("fam-A");
+        assertThat(nuevo.get("fam", String.class)).isEqualTo("b5ed63f5-31e3-5c3a-95ae-21dd88bcd621");
         assertThat(nuevo.getId()).isNotEqualTo(jtiViejo);
         verify(refreshTokenRepository).save(any(RefreshToken.class));
-        verify(refreshTokenRepository, never()).revocarFamilia(anyString());
+        verify(refreshTokenRepository, never()).eliminarDeUsuario(7);
     }
 
     @Test
-    @DisplayName("rotar: reutilizar un token ya usado revoca toda la familia")
+    @DisplayName("rotar: reutilizar un token ya usado cierra todas las sesiones ante posible robo")
     void rotar_tokenYaUsado_revocaFamilia() {
-        String token = jwtService.generarRefreshToken(usuario, "fam-B").token();
+        String token = jwtService.generarRefreshToken(usuario, "c50439c8-b475-56d7-83e8-a357cff0787b").token();
         String jti = jwtService.leerRefreshClaims(token).getId();
-        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(jti, "fam-B", true)));
+        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(token, true)));
 
         assertThatThrownBy(() -> service.rotar(token)).isInstanceOf(SesionInvalidaException.class);
 
-        verify(refreshTokenRepository).revocarFamilia("fam-B");
+        verify(refreshTokenRepository).eliminarDeUsuario(7);
         verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
     }
 
     @Test
     @DisplayName("rotar: si dos peticiones usan el mismo token a la vez, la perdedora se trata como reutilizacion")
     void rotar_carreraConcurrente_revocaFamilia() {
-        String token = jwtService.generarRefreshToken(usuario, "fam-C").token();
+        String token = jwtService.generarRefreshToken(usuario, "455553a0-95cf-5674-81bf-497f830e7f54").token();
         String jti = jwtService.leerRefreshClaims(token).getId();
-        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(jti, "fam-C", false)));
+        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(token, false)));
         when(refreshTokenRepository.revocarSiVigente(jti)).thenReturn(0);
 
         assertThatThrownBy(() -> service.rotar(token)).isInstanceOf(SesionInvalidaException.class);
 
-        verify(refreshTokenRepository).revocarFamilia("fam-C");
+        verify(refreshTokenRepository).eliminarDeUsuario(7);
     }
 
     @Test
@@ -141,7 +144,7 @@ class RefreshTokenServiceTest {
         assertThatThrownBy(() -> service.rotar(jwtService.generarAccessToken(usuario)))
                 .isInstanceOf(SesionInvalidaException.class);
 
-        String desconocido = jwtService.generarRefreshToken(usuario, "fam-D").token();
+        String desconocido = jwtService.generarRefreshToken(usuario, "ccc04813-e513-583b-8ec3-b55daabeaf6c").token();
         when(refreshTokenRepository.findByJti(anyString())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.rotar(desconocido)).isInstanceOf(SesionInvalidaException.class);
     }
@@ -149,15 +152,12 @@ class RefreshTokenServiceTest {
     @Test
     @DisplayName("rotar: usuario desactivado o con la sesion cerrada (version distinta) no puede renovar")
     void rotar_usuarioInactivoOVersionCambiada() {
-        String token = jwtService.generarRefreshToken(usuario, "fam-E").token();
+        String token = jwtService.generarRefreshToken(usuario, "0c2540fa-310e-50ac-84f3-b1a124bfd3ee").token();
         String jti = jwtService.leerRefreshClaims(token).getId();
-        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(jti, "fam-E", false)));
-        when(refreshTokenRepository.revocarSiVigente(jti)).thenReturn(1);
-        when(usuarioRepository.findById(7)).thenReturn(Optional.of(usuario));
-
+        when(refreshTokenRepository.findByJti(jti)).thenReturn(Optional.of(registro(token, false)));
         usuario.setVersionSesion(3); // hizo logout despues de emitir el token
         assertThatThrownBy(() -> service.rotar(token)).isInstanceOf(SesionInvalidaException.class);
-        verify(refreshTokenRepository).revocarFamilia("fam-E");
+        verify(refreshTokenRepository, never()).save(any(RefreshToken.class));
 
         usuario.setVersionSesion(2);
         usuario.setActivo(false);

@@ -25,10 +25,14 @@ import desarrollo.web.Bizagi2.exception.ConflictoDominioException;
 import desarrollo.web.Bizagi2.exception.RecursoNoEncontradoException;
 import desarrollo.web.Bizagi2.exception.ReglaNegocioException;
 import desarrollo.web.Bizagi2.repository.UsuarioRepository;
+import desarrollo.web.Bizagi2.repository.RefreshTokenRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UsuarioServiceTest - Pruebas basadas en HU-02 y HU-03")
 class UsuarioServiceTest {
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -115,7 +119,7 @@ class UsuarioServiceTest {
         usuario.setRolAcceso(RolAcceso.LECTOR);
         usuario.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(5)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(5)).thenReturn(Optional.of(usuario));
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
 
         Usuario cambios = new Usuario();
@@ -141,7 +145,7 @@ class UsuarioServiceTest {
         usuario.setRolAcceso(RolAcceso.EDITOR);
         usuario.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(5)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(5)).thenReturn(Optional.of(usuario));
 
         usuarioService.desactivar(5, 1);
 
@@ -162,7 +166,7 @@ class UsuarioServiceTest {
         admin.setRolAcceso(RolAcceso.ADMINISTRADOR);
         admin.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(1)).thenReturn(Optional.of(admin));
+        when(usuarioRepository.buscarParaActualizar(1)).thenReturn(Optional.of(admin));
         when(usuarioRepository.findByEmpresaId(1)).thenReturn(List.of(admin));
 
         assertThatThrownBy(() -> usuarioService.desactivar(1, 1))
@@ -181,7 +185,7 @@ class UsuarioServiceTest {
         usuario.setActivo(false);
         usuario.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(8)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(8)).thenReturn(Optional.of(usuario));
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
 
         Usuario activado = usuarioService.activar(8, 1);
@@ -229,7 +233,7 @@ class UsuarioServiceTest {
         usuario.setId(3);
         usuario.setVersionSesion(5);
 
-        when(usuarioRepository.findById(3)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(3)).thenReturn(Optional.of(usuario));
 
         usuarioService.cerrarSesion(3);
 

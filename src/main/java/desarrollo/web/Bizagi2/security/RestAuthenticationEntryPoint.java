@@ -21,6 +21,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint, A
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException ex)
             throws IOException {
+        response.setHeader("WWW-Authenticate", "Bearer");
         escribir(response, HttpServletResponse.SC_UNAUTHORIZED, "No autenticado: falta el token o no es valido");
     }
 

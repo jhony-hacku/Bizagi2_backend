@@ -22,6 +22,7 @@ import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.ReglaNegocioException;
 import desarrollo.web.Bizagi2.repository.UsuarioRepository;
+import desarrollo.web.Bizagi2.repository.RefreshTokenRepository;
 import desarrollo.web.Bizagi2.security.JwtService;
 import desarrollo.web.Bizagi2.service.AuthService;
 import desarrollo.web.Bizagi2.service.EmpresaService;
@@ -31,6 +32,9 @@ import desarrollo.web.Bizagi2.service.UsuarioService;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("HU-03: Inicio de sesión")
 class HU03_InicioSesionTest {
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -152,7 +156,7 @@ class HU03_InicioSesionTest {
         usuario.setId(7);
         usuario.setVersionSesion(2);
 
-        when(usuarioRepository.findById(7)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(7)).thenReturn(Optional.of(usuario));
 
         usuarioService.cerrarSesion(7);
 

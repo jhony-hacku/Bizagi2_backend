@@ -59,7 +59,7 @@ public class AuthService {
     }
 
     // Renovacion: valida y rota el refresh token; entrega un access nuevo y un refresh nuevo.
-    // noRollbackFor vive en RefreshTokenService.rotar, que es quien revoca la familia ante una reutilizacion.
+    // noRollbackFor vive en RefreshTokenService.rotar, que confirma la revocacion ante una reutilizacion.
     @Transactional(noRollbackFor = SesionInvalidaException.class)
     public Sesion refrescar(String refreshToken) {
         RefreshTokenService.Rotacion rotacion = refreshTokenService.rotar(refreshToken);
@@ -67,9 +67,13 @@ public class AuthService {
     }
 
     // Cierra la sesion: sube la version (mata los access tokens vivos) y borra los refresh tokens
-    public void logout(Usuario usuario) {
-        usuarioService.cerrarSesion(usuario.getId());
-        refreshTokenService.cerrarSesiones(usuario.getId());
+    public void logout(Usuario usuario, String refreshToken) {
+        if (usuario != null) {
+            usuarioService.cerrarSesion(usuario.getId());
+            refreshTokenService.cerrarSesiones(usuario.getId());
+        } else {
+            refreshTokenService.cerrarPorRefresh(refreshToken);
+        }
     }
 
     private Sesion abrirSesion(Usuario usuario) {

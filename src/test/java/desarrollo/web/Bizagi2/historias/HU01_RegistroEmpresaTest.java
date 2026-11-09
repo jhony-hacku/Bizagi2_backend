@@ -29,6 +29,7 @@ import desarrollo.web.Bizagi2.security.JwtService;
 import desarrollo.web.Bizagi2.service.AuthService;
 import desarrollo.web.Bizagi2.service.EmpresaService;
 import desarrollo.web.Bizagi2.service.UsuarioService;
+import desarrollo.web.Bizagi2.service.RefreshTokenService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("HU-01: Registro de empresa")
@@ -46,11 +47,14 @@ class HU01_RegistroEmpresaTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(empresaService, usuarioService, jwtService);
+        authService = new AuthService(empresaService, usuarioService, jwtService, refreshTokenService);
     }
 
     @Test
@@ -106,7 +110,7 @@ class HU01_RegistroEmpresaTest {
         adminGuardado.setEmpresa(empresaCreada);
 
         when(usuarioService.crear(eq(10), any(Usuario.class))).thenReturn(adminGuardado);
-        when(jwtService.generarToken(adminGuardado)).thenReturn("mocked-jwt-token");
+        when(jwtService.generarAccessToken(adminGuardado)).thenReturn("mocked-jwt-token");
 
         Map<String, String> datos = new HashMap<>();
         datos.put("nombreEmpresa", "Tech Corp");
@@ -116,7 +120,7 @@ class HU01_RegistroEmpresaTest {
         datos.put("email", "admin@techcorp.com");
         datos.put("password", "SecurePass123");
 
-        Map<String, Object> respuesta = authService.registrar(datos);
+        Map<String, Object> respuesta = authService.registrar(datos).cuerpo();
 
         assertThat(respuesta).isNotNull();
         assertThat(respuesta.get("token")).isEqualTo("mocked-jwt-token");

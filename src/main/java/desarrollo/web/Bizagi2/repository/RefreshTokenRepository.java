@@ -21,10 +21,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     int revocarSiVigente(@Param("jti") String jti);
 
     @Modifying(flushAutomatically = true)
-    @Query("update RefreshToken r set r.revocado = true where r.familiaId = :familiaId and r.revocado = false")
-    int revocarFamilia(@Param("familiaId") String familiaId);
-
-    @Modifying(flushAutomatically = true)
     @Query("delete from RefreshToken r where r.usuario.id = :usuarioId")
     int eliminarDeUsuario(@Param("usuarioId") Integer usuarioId);
 

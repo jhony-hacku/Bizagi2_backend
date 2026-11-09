@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
@@ -34,6 +35,7 @@ public class JwtService {
     private final SecretKey secretKey;
     private final long accessExpirationMs;
     private final long refreshExpirationMs;
+    private final JwtParser parser;
 
     public JwtService(
             @Value("${jwt.secret}") String secret,
@@ -49,6 +51,7 @@ public class JwtService {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessExpirationMs = accessExpirationMs;
         this.refreshExpirationMs = refreshExpirationMs;
+        this.parser = Jwts.parser().verifyWith(secretKey).requireIssuer(ISSUER).build();
     }
 
     // Token corto: lleva los datos que el frontend necesita para pintar la sesion (rol, empresa).
@@ -72,8 +75,12 @@ public class JwtService {
     // Token largo: minimo de datos (quien es, a que familia pertenece y su id unico "jti").
     // El jti se guarda en la BD para poder rotarlo y revocarlo.
     public RefreshEmitido generarRefreshToken(Usuario usuario, String familiaId) {
+        return generarRefreshToken(usuario, familiaId, Instant.now().plusMillis(refreshExpirationMs));
+    }
+
+    // Las rotaciones conservan el vencimiento original: una familia dura como maximo siete dias.
+    public RefreshEmitido generarRefreshToken(Usuario usuario, String familiaId, Instant expira) {
         Instant ahora = Instant.now();
-        Instant expira = ahora.plusMillis(refreshExpirationMs);
         String jti = UUID.randomUUID().toString();
         String token = Jwts.builder()
                 .issuer(ISSUER)
@@ -104,14 +111,25 @@ public class JwtService {
     }
 
     private Claims leer(String token, String tipoEsperado) {
-        Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .requireIssuer(ISSUER)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        Claims claims = parser.parseSignedClaims(token).getPayload();
         if (!tipoEsperado.equals(claims.get(CLAIM_TIPO, String.class))) {
             throw new JwtException("Tipo de token incorrecto");
+        }
+        try {
+            if (claims.getExpiration() == null || claims.getIssuedAt() == null
+                    || !claims.getExpiration().after(claims.getIssuedAt())
+                    || claims.getIssuedAt().toInstant().isAfter(Instant.now().plusSeconds(30))
+                    || Integer.parseInt(claims.getSubject()) <= 0
+                    || claims.get(CLAIM_VERSION, Integer.class) == null
+                    || claims.get(CLAIM_VERSION, Integer.class) < 0) {
+                throw new JwtException("Claims de sesion incompletos o invalidos");
+            }
+            if (TIPO_REFRESH.equals(tipoEsperado)) {
+                UUID.fromString(claims.getId());
+                UUID.fromString(claims.get(CLAIM_FAMILIA, String.class));
+            }
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new JwtException("Claims de sesion invalidos", ex);
         }
         return claims;
     }

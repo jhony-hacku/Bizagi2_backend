@@ -29,7 +29,7 @@ cp .env.example .env
 ```properties
 DB_USERNAME=postgres
 DB_PASSWORD=tu_password_de_postgres
-JWT_SECRET=una-clave-secreta-de-al-menos-32-caracteres
+JWT_SECRET=<salida de openssl rand -base64 48>
 ```
 
 La duracion de los tokens y la cookie del refresh token se configuran con `jwt.*` (ver [Autenticacion](#autenticacion-access-token-y-refresh-token)). En local por `http` la cookie Secure solo funciona en `localhost`; si tu navegador no la guarda, usa el perfil `dev`.
@@ -58,7 +58,7 @@ Sin PostgreSQL, con H2 en memoria (no necesita `.env`):
 
 La consola H2 queda en `http://localhost:8080/h2-console` con JDBC URL `jdbc:h2:mem:bizagi2`, usuario `sa` y contrasena vacia.
 
-Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`. El access token dura 15 minutos; cuando venza, `POST /api/auth/refresh` (el navegador envia solo la cookie) entrega uno nuevo.
+Documentacion interactiva de la API: `http://localhost:8080/swagger-ui.html`. Para probar rutas protegidas: hacer login, copiar el `token`, pulsar **Authorize** y pegar `Bearer <token>`. El access token dura 15 minutos; cuando venza, `POST /api/auth/refresh` (el navegador envia la cookie y X-XSRF-TOKEN) entrega uno nuevo.
 
 ### Ejecutar con Docker
 
@@ -93,7 +93,7 @@ docker compose up --build -d
 
 ## Endpoints
 
-Todos requieren el header `Authorization: Bearer <access token>`, salvo `/api/auth/register`, `/api/auth/login` y `/api/auth/refresh` (esta ultima se autentica con la cookie del refresh token).
+Todos requieren el header `Authorization: Bearer <access token>`, salvo `/api/auth/register`, `/api/auth/login` y `/api/auth/refresh` (refresh y logout admiten la cookie del refresh token; GET /api/auth/csrf tambien es publico).
 
 | Recurso | Rutas |
 |---|---|
@@ -192,11 +192,11 @@ logout ──► se revocan todos los refresh del usuario y se borra la cookie
 **Practicas aplicadas.**
 
 - **Rotacion de un solo uso:** cada vez que se usa un refresh token se revoca y se entrega otro. La revocacion es un `UPDATE ... WHERE revocado = false` atomico, asi que dos peticiones simultaneas no pueden usar el mismo token.
-- **Deteccion de robo:** todos los refresh tokens de un mismo login forman una *familia*. Si llega uno ya usado (alguien lo copio y lo uso despues, o antes que el dueno), se revoca la familia entera y el usuario debe iniciar sesion. Esa revocacion se conserva aunque la peticion falle (`noRollbackFor`).
+- **Deteccion de robo:** todos los refresh tokens de un mismo login forman una *familia*. Si llega uno ya usado (alguien lo copio y lo uso despues, o antes que el dueno), se cierran todas las sesiones de la cuenta y el usuario debe iniciar sesion. Esa revocacion se conserva aunque la peticion falle (`noRollbackFor`).
 - **Refresh token fuera del alcance de JavaScript:** cookie HttpOnly (un XSS no lo puede leer), Secure (solo HTTPS), SameSite=Strict (no se envia desde otros sitios, defensa CSRF) y limitada a `/api/auth` (no viaja en las demas peticiones). El access token en cambio va en el header, por lo que el resto de la API no es vulnerable a CSRF.
 - **Separacion de tipos:** el filtro solo acepta `tipo=access` y `/refresh` solo acepta `tipo=refresh`. Ademas se valida firma (HMAC-SHA), expiracion y emisor (`iss`).
 - **Datos minimos en el refresh token:** no lleva rol ni email; el rol y la empresa que se aplican en cada peticion salen siempre de la BD, asi un cambio de rol o una desactivacion tienen efecto de inmediato y no esperan a que venza el token.
-- **Revocacion centralizada:** `versionSesion` (claim `v`) viaja en ambos tokens. Al cerrar sesion o desactivar al usuario se incrementa y todos sus tokens dejan de servir; ademas el logout borra sus registros de `refresh_tokens`.
+- **Revocacion centralizada:** `versionSesion` (claim `v`) viaja en ambos tokens. Al cerrar sesion, cambiar la contraseña, detectar reutilizacion o desactivar al usuario se incrementa y todos sus tokens dejan de servir; ademas el logout borra sus registros de `refresh_tokens`.
 - **Solo el `jti` en la BD:** la tabla guarda el id del token, no el token; quien lea la tabla no puede fabricar un refresh token porque no tiene la clave de firma.
 - **Respuestas con `Cache-Control: no-store`** en login, registro y refresh, y limpieza diaria (3:00) de los refresh tokens vencidos.
 - **Validacion de configuracion al arrancar:** el secreto debe tener al menos 32 caracteres y el refresh debe durar mas que el access.
@@ -210,7 +210,7 @@ logout ──► se revocan todos los refresh del usuario y se borra la cookie
 | `JWT_REFRESH_EXPIRATION_MS` | `604800000` (7 dias) | Duracion del refresh token y de la cookie |
 | `JWT_REFRESH_COOKIE_SECURE` | `true` | Poner `false` solo para probar por `http` (el perfil `dev` y el `docker-compose.yml` ya lo hacen) |
 
-**Para el frontend.** Guardar el access token solo en memoria; llamar a la API con `credentials: 'include'` (o `withCredentials: true`) para que el navegador envie la cookie en `/api/auth/*`; al recibir un `401` en una ruta protegida llamar una vez a `/api/auth/refresh` y reintentar, y si el refresh tambien responde `401` llevar al usuario al login. Al recargar la pagina el access token se pierde: se recupera llamando a `/api/auth/refresh`. Si el frontend vive en otro origen hay que habilitar CORS con `allowCredentials` para ese origen y mantener `SameSite` acorde (con `Strict`, front y API deben compartir sitio, por ejemplo `app.empresa.com` y `api.empresa.com`).
+**Para el frontend.** El frontend incluido conserva el access en memoria, obtiene CSRF, recupera la sesion al recargar y renueva una vez ante 401. Sirve frontend y API bajo el mismo origen con /api por proxy; asi las cookies se envian automaticamente. No habilites CORS con credenciales para origenes arbitrarios.
 
 ## Reglas de negocio (en los servicios)
 
@@ -249,3 +249,30 @@ CREATE DATABASE bizagi2;
 La tabla `historial_procesos` de la version anterior ya no se usa (ahora es `historial`).
 
 Esta version agrega la tabla `refresh_tokens`. Con `ddl-auto=update` se crea sola; con el perfil `prod` (`validate`) hay que crearla antes de desplegar o arrancar una vez con `DDL_AUTO=update`. La propiedad `jwt.expiration-ms` se reemplazo por `jwt.access-expiration-ms` y `jwt.refresh-expiration-ms`.
+
+
+## Contrato de sesion y pruebas JWT
+
+- Access: 15 minutos, solo en memoria del frontend. Refresh: cookie HttpOnly, SameSite=Strict y Secure salvo el perfil dev.
+- Una familia vence siete dias despues del login inicial. Rotar no extiende ese limite.
+- Logout cierra todas las sesiones del usuario y es idempotente. Acepta refresh aunque el access este vencido.
+- Cambiar contraseña, desactivar un usuario o detectar reutilizacion invalida tambien los access emitidos. Una reutilizacion cierra todas las sesiones de la cuenta.
+- Login, registro, refresh y logout requieren CSRF: primero GET `/api/auth/csrf`; despues enviar la cookie `XSRF-TOKEN` tambien como cabecera `X-XSRF-TOKEN`. Angular lo hace automaticamente. No se acepta el token en parametros de formulario.
+- La API y el frontend se sirven bajo el mismo origen (`/api` por proxy). No se habilita CORS con credenciales para otros origenes.
+- Los clientes HTTP y Swagger deben obtener CSRF y enviar la cabecera antes de POST `/api/auth/*`. La coleccion Postman incluida lo prepara automaticamente.
+- Limites locales de login: 10 solicitudes por cuenta y 100 por IP cada cinco minutos. En varias replicas se necesita ademas un limite compartido en el proxy. No se confia en X-Forwarded-For del cliente.
+- Docker exige JWT_SECRET sin valor conocido por defecto. Genera la clave con `openssl rand -base64 48`. Para probar compose por HTTP local, declara `JWT_REFRESH_COOKIE_SECURE=false` explicitamente; con HTTPS utiliza true.
+
+Verificacion completa: `./mvnw verify`. `SesionPersistenciaTest` usa repositorios y transacciones reales y cubre rotaciones concurrentes, replay, logout, contraseña y actualizaciones del usuario. Por defecto usa H2; para PostgreSQL usa una base **exclusiva de pruebas**, porque el perfil test crea y elimina su esquema:
+
+```bash
+./mvnw -Dtest=SesionPersistenciaTest -Dspring.datasource.url=jdbc:postgresql://localhost:5432/jwt_tests -Dspring.datasource.driver-class-name=org.postgresql.Driver -Dspring.datasource.username=jwt_tests -Dspring.datasource.password=tu_clave test
+```
+
+Smoke HTTP sin dependencias Python adicionales (crea cuentas de prueba):
+
+```bash
+python scripts/jwt_smoke.py --base-url http://localhost:8080/api
+```
+
+Para incluir expiracion real, inicia una instancia local aislada con `--jwt.access-expiration-ms=2000` y ejecuta el smoke con `--expiracion-corta`.

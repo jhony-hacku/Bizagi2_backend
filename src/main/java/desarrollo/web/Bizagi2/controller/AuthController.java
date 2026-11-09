@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.SesionInvalidaException;
 import desarrollo.web.Bizagi2.security.RefreshCookie;
+import desarrollo.web.Bizagi2.security.JwtService;
+import desarrollo.web.Bizagi2.security.LoginIntentos;
+import jakarta.servlet.http.HttpServletRequest;
 import desarrollo.web.Bizagi2.service.AuthService;
 import desarrollo.web.Bizagi2.service.AuthService.Sesion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +38,14 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshCookie refreshCookie;
+    private final JwtService jwtService;
+    private final LoginIntentos loginIntentos;
+
+    @GetMapping("/csrf")
+    public ResponseEntity<Void> csrf(CsrfToken token) {
+        token.getToken(); // Materializa la cookie XSRF-TOKEN que Angular envia en X-XSRF-TOKEN.
+        return ResponseEntity.noContent().header(HttpHeaders.CACHE_CONTROL, "no-store").build();
+    }
 
     @Operation(
             summary = "Registrar una empresa y su administrador inicial (devuelve access token y deja el refresh token en una cookie HttpOnly)",
@@ -60,7 +73,13 @@ public class AuthController {
                               "password": "Clave12345"
                             }"""))))
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> datos) {
+    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> datos, HttpServletRequest request) {
+        if (!loginIntentos.permitir(request.getRemoteAddr(), datos.get("email"))) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, "300")
+                    .body(Map.of("status", 429, "message", "Demasiados intentos. Intenta de nuevo mas tarde",
+                            "timestamp", Instant.now().toString()));
+        }
         return conSesion(HttpStatus.OK, authService.login(datos.get("email"), datos.get("password")));
     }
 
@@ -84,8 +103,9 @@ public class AuthController {
 
     @Operation(summary = "Cerrar sesion: el access token y los refresh tokens del usuario dejan de ser validos")
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@AuthenticationPrincipal Usuario usuario) {
-        authService.logout(usuario);
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal Usuario usuario,
+            @CookieValue(name = RefreshCookie.NOMBRE, required = false) String refreshToken) {
+        authService.logout(usuario, refreshToken);
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.borrar().toString())
                 .build();
@@ -94,7 +114,8 @@ public class AuthController {
     // El refresh token nunca va en el cuerpo: solo en la cookie HttpOnly
     private ResponseEntity<Map<String, Object>> conSesion(HttpStatus status, Sesion sesion) {
         return ResponseEntity.status(status)
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.crear(sesion.refreshToken()).toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.crear(sesion.refreshToken(),
+                        jwtService.leerRefreshClaims(sesion.refreshToken()).getExpiration().toInstant()).toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(sesion.cuerpo());
     }

@@ -1,6 +1,7 @@
 package desarrollo.web.Bizagi2.security;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
@@ -26,8 +27,10 @@ public class RefreshCookie {
         this.duracion = Duration.ofMillis(refreshExpirationMs);
     }
 
-    public ResponseCookie crear(String refreshToken) {
-        return base(refreshToken).maxAge(duracion).build();
+    public ResponseCookie crear(String refreshToken, Instant expiraEn) {
+        Duration restante = Duration.between(Instant.now(), expiraEn);
+        if (restante.compareTo(duracion) > 0) restante = duracion;
+        return base(refreshToken).maxAge(restante.isNegative() ? Duration.ZERO : restante).build();
     }
 
     public ResponseCookie borrar() {

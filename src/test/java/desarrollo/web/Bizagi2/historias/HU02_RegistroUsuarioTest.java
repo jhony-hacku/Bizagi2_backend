@@ -24,12 +24,16 @@ import desarrollo.web.Bizagi2.exception.ConflictoDominioException;
 import desarrollo.web.Bizagi2.exception.RecursoNoEncontradoException;
 import desarrollo.web.Bizagi2.exception.ReglaNegocioException;
 import desarrollo.web.Bizagi2.repository.UsuarioRepository;
+import desarrollo.web.Bizagi2.repository.RefreshTokenRepository;
 import desarrollo.web.Bizagi2.service.EmpresaService;
 import desarrollo.web.Bizagi2.service.UsuarioService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("HU-02: Registro de usuario en empresa")
 class HU02_RegistroUsuarioTest {
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -118,7 +122,7 @@ class HU02_RegistroUsuarioTest {
         usuarioExistente.setRolAcceso(RolAcceso.LECTOR);
         usuarioExistente.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(20)).thenReturn(Optional.of(usuarioExistente));
+        when(usuarioRepository.buscarParaActualizar(20)).thenReturn(Optional.of(usuarioExistente));
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
 
         Usuario cambios = new Usuario();
@@ -143,7 +147,7 @@ class HU02_RegistroUsuarioTest {
         editor.setRolAcceso(RolAcceso.EDITOR);
         editor.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(20)).thenReturn(Optional.of(editor));
+        when(usuarioRepository.buscarParaActualizar(20)).thenReturn(Optional.of(editor));
 
         usuarioService.desactivar(20, 1);
 
@@ -164,7 +168,7 @@ class HU02_RegistroUsuarioTest {
         admin.setRolAcceso(RolAcceso.ADMINISTRADOR);
         admin.setEmpresa(empresa);
 
-        when(usuarioRepository.findById(10)).thenReturn(Optional.of(admin));
+        when(usuarioRepository.buscarParaActualizar(10)).thenReturn(Optional.of(admin));
         when(usuarioRepository.findByEmpresaId(1)).thenReturn(List.of(admin));
 
         assertThatThrownBy(() -> usuarioService.desactivar(10, 1))

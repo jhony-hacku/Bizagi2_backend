@@ -18,7 +18,7 @@ import lombok.Setter;
 // Registro de cada refresh token emitido. Solo se guarda su id (jti), no el token: el token va firmado,
 // asi que quien lea esta tabla no puede fabricar uno valido.
 // Todos los tokens que nacen de un mismo login comparten "familiaId": si se reutiliza uno ya rotado
-// (señal de robo) se revoca la familia completa.
+// (señal de robo) se cierran todas las sesiones del usuario.
 @Entity
 @Table(name = "refresh_tokens", indexes = {
         @Index(name = "idx_refresh_familia", columnList = "familia_id"),

@@ -21,6 +21,18 @@ jobs:
     name: Build, Test & Sonar
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: jwt_tests
+          POSTGRES_USER: jwt_tests
+          POSTGRES_PASSWORD: jwt_tests_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jwt_tests -d jwt_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -49,6 +61,14 @@ jobs:
           path: target/surefire-reports/*.xml
           reporter: java-junit
           fail-on-error: false
+
+      - name: Concurrencia JWT con PostgreSQL real
+        run: >-
+          mvn -B -Dtest=SesionPersistenciaTest
+          -Dspring.datasource.url=jdbc:postgresql://localhost:5432/jwt_tests
+          -Dspring.datasource.driver-class-name=org.postgresql.Driver
+          -Dspring.datasource.username=jwt_tests
+          -Dspring.datasource.password=jwt_tests_ci test
 
       - name: Guardar reporte JaCoCo
         if: always()
@@ -119,8 +139,10 @@ jobs:
           fi
 
           echo "=== 1. Registrar empresa y administrador (HU-01) ==="
+          curl -s -c cookies.txt http://localhost:8080/api/auth/csrf > /dev/null
+          CSRF=$(awk '$6 == "XSRF-TOKEN" {print $7}' cookies.txt)
           REG_RESP=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/auth/register \
-            -H 'Content-Type: application/json' \
+            -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $CSRF" -b cookies.txt -c cookies.txt \
             -d '{
               "nombreEmpresa": "Acme CI Corp",
               "nit": "900123456-1",
@@ -141,7 +163,7 @@ jobs:
 
           echo "=== 2. Iniciar sesion y obtener token JWT (HU-03) ==="
           LOGIN_RESP=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8080/api/auth/login \
-            -H 'Content-Type: application/json' \
+            -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $CSRF" -b cookies.txt -c cookies.txt \
             -d '{
               "email": "admin@acmeci.com",
               "password": "ClaveSegura123"
@@ -175,3 +197,4 @@ jobs:
           fi
 
           echo "=== Smoke Test E2E completado con exito ==="
+          python3 scripts/jwt_smoke.py --base-url http://localhost:8080/api

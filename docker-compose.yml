@@ -31,15 +31,15 @@ services:
       DB_USER: ${POSTGRES_USER:-bizagi}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-bizagi_dev_password}
       DDL_AUTO: ${DDL_AUTO:-update}
-      JWT_SECRET: ${JWT_SECRET:-local-docker-secret-change-me-32-characters}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET con una clave aleatoria de al menos 32 bytes}
       JWT_ACCESS_EXPIRATION_MS: ${JWT_ACCESS_EXPIRATION_MS:-900000}
       JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
-      # En compose se usa http://localhost, por eso la cookie no es Secure. En produccion real: true
-      JWT_REFRESH_COOKIE_SECURE: ${JWT_REFRESH_COOKIE_SECURE:-false}
+      # Para HTTP local, establece JWT_REFRESH_COOKIE_SECURE=false explicitamente en .env
+      JWT_REFRESH_COOKIE_SECURE: ${JWT_REFRESH_COOKIE_SECURE:-true}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     ports:
       - "${APP_PORT:-8080}:8080"
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres_data:

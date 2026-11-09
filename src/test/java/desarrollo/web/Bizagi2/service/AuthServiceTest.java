@@ -130,7 +130,7 @@ class AuthServiceTest {
         Usuario usuario = new Usuario();
         usuario.setId(10);
 
-        authService.logout(usuario);
+        authService.logout(usuario, null);
 
         verify(usuarioService).cerrarSesion(10);
         verify(refreshTokenService).cerrarSesiones(10);

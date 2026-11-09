@@ -43,6 +43,21 @@ class JwtServiceTest {
     }
 
     @Test
+    void rechazaClaimsAusentesYSubjectsInvalidosAunqueLaFirmaSeaValida() {
+        var key = io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                SECRET_VALIDO.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var ahora = java.time.Instant.now();
+        String sinExp = io.jsonwebtoken.Jwts.builder().issuer("bizagi2").subject("1")
+                .claim("tipo", "access").claim("v", 0).issuedAt(java.util.Date.from(ahora))
+                .signWith(key).compact();
+        String subjectInvalido = io.jsonwebtoken.Jwts.builder().issuer("bizagi2").subject("no-numero")
+                .claim("tipo", "access").claim("v", 0).issuedAt(java.util.Date.from(ahora))
+                .expiration(java.util.Date.from(ahora.plusSeconds(60))).signWith(key).compact();
+        assertThrows(JwtException.class, () -> jwtService.leerAccessClaims(sinExp));
+        assertThrows(JwtException.class, () -> jwtService.leerAccessClaims(subjectInvalido));
+    }
+
+    @Test
     @DisplayName("Constructor lanza excepcion si secret es nulo o menor a 32 caracteres")
     void testConstructorValidacionSecret() {
         assertThrows(IllegalArgumentException.class, () -> new JwtService(null, ACCESS_MS, REFRESH_MS));
@@ -75,13 +90,13 @@ class JwtServiceTest {
     @Test
     @DisplayName("Refresh token: lleva jti, familia y version, y dura mucho mas que el access")
     void testGenerarYLeerRefreshToken() {
-        JwtService.RefreshEmitido emitido = jwtService.generarRefreshToken(usuario(42, RolAcceso.EDITOR, 3), "fam-1");
+        JwtService.RefreshEmitido emitido = jwtService.generarRefreshToken(usuario(42, RolAcceso.EDITOR, 3), "a40df00a-f7f0-5723-9efa-75e787ff95f3");
 
         Claims claims = jwtService.leerRefreshClaims(emitido.token());
         assertEquals("42", claims.getSubject());
         assertEquals("refresh", claims.get("tipo"));
         assertEquals(emitido.jti(), claims.getId());
-        assertEquals("fam-1", claims.get("fam", String.class));
+        assertEquals("a40df00a-f7f0-5723-9efa-75e787ff95f3", claims.get("fam", String.class));
         assertEquals(3, claims.get("v", Integer.class));
         // El refresh no lleva datos de perfil: solo lo necesario para renovar
         assertNull(claims.get("email"));
@@ -93,14 +108,14 @@ class JwtServiceTest {
     @DisplayName("Cada refresh token tiene un jti distinto")
     void testJtiUnico() {
         Usuario usuario = usuario(1, RolAcceso.LECTOR, 0);
-        assertNotEquals(jwtService.generarRefreshToken(usuario, "f").jti(),
-                jwtService.generarRefreshToken(usuario, "f").jti());
+        assertNotEquals(jwtService.generarRefreshToken(usuario, "84865b36-daa9-51a8-936a-99a24788bf1f").jti(),
+                jwtService.generarRefreshToken(usuario, "84865b36-daa9-51a8-936a-99a24788bf1f").jti());
     }
 
     @Test
     @DisplayName("Un refresh token no sirve como access token")
     void testRefreshNoSirveComoAccess() {
-        String refresh = jwtService.generarRefreshToken(usuario(1, RolAcceso.LECTOR, 0), "f").token();
+        String refresh = jwtService.generarRefreshToken(usuario(1, RolAcceso.LECTOR, 0), "84865b36-daa9-51a8-936a-99a24788bf1f").token();
         assertThrows(JwtException.class, () -> jwtService.leerAccessClaims(refresh));
     }
 
@@ -127,7 +142,7 @@ class JwtServiceTest {
         JwtService corto = new JwtService(SECRET_VALIDO, 1L, 2L); // 1 ms y 2 ms
 
         String access = corto.generarAccessToken(usuario(1, RolAcceso.LECTOR, 1));
-        String refresh = corto.generarRefreshToken(usuario(1, RolAcceso.LECTOR, 1), "f").token();
+        String refresh = corto.generarRefreshToken(usuario(1, RolAcceso.LECTOR, 1), "84865b36-daa9-51a8-936a-99a24788bf1f").token();
         Thread.sleep(30);
 
         assertThrows(JwtException.class, () -> corto.leerAccessClaims(access));

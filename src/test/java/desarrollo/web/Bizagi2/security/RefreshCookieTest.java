@@ -11,7 +11,7 @@ class RefreshCookieTest {
     @Test
     @DisplayName("La cookie del refresh token es HttpOnly, Secure, SameSite=Strict y limitada a /api/auth")
     void crear_aplicaAtributosDeSeguridad() {
-        ResponseCookie cookie = new RefreshCookie(true, 604_800_000L).crear("abc");
+        ResponseCookie cookie = new RefreshCookie(true, 604_800_000L).crear("abc", java.time.Instant.now().plusSeconds(604800));
 
         assertThat(cookie.getName()).isEqualTo("refresh_token");
         assertThat(cookie.getValue()).isEqualTo("abc");
@@ -19,7 +19,7 @@ class RefreshCookieTest {
         assertThat(cookie.isSecure()).isTrue();
         assertThat(cookie.getSameSite()).isEqualTo("Strict");
         assertThat(cookie.getPath()).isEqualTo("/api/auth");
-        assertThat(cookie.getMaxAge().toDays()).isEqualTo(7);
+        assertThat(cookie.getMaxAge().toSeconds()).isBetween(604_798L, 604_800L);
     }
 
     @Test
