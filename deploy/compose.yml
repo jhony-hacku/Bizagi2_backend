@@ -39,7 +39,11 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DDL_AUTO: ${DDL_AUTO:-update}
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env}
-      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      # Access token corto (15 min) y refresh token largo (7 dias) en cookie HttpOnly
+      JWT_ACCESS_EXPIRATION_MS: ${JWT_ACCESS_EXPIRATION_MS:-900000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
+      # true: las cookies de sesion solo viajan por HTTPS. Ponlo en false unicamente si se entra por HTTP
+      JWT_REFRESH_COOKIE_SECURE: ${JWT_REFRESH_COOKIE_SECURE:-true}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       # La JVM usa como maximo el 70% de la memoria del contenedor para el heap
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
