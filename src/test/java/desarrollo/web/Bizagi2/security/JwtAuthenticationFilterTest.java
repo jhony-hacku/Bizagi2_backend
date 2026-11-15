@@ -74,7 +74,7 @@ class JwtAuthenticationFilterTest {
         usuario.setVersionSesion(1);
         usuario.setRolAcceso(RolAcceso.ADMINISTRADOR);
 
-        when(usuarioRepository.findById(5)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.findConEmpresaById(5)).thenReturn(Optional.of(usuario));
 
         filter.doFilter(request, response, chain);
 

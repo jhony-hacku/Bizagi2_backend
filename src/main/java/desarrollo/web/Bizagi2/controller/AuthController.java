@@ -1,8 +1,6 @@
 package desarrollo.web.Bizagi2.controller;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -16,6 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import desarrollo.web.Bizagi2.dto.ErrorResponse;
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.SesionInvalidaException;
 import desarrollo.web.Bizagi2.security.RefreshCookie;
@@ -28,6 +30,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -60,7 +63,7 @@ public class AuthController {
                               "password": "Clave12345"
                             }"""))))
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> registrar(@RequestBody Map<String, String> datos) {
+    public ResponseEntity<AuthResponse> registrar(@Valid @RequestBody RegistroRequest datos) {
         return conSesion(HttpStatus.CREATED, authService.registrar(datos));
     }
 
@@ -73,31 +76,26 @@ public class AuthController {
                               "password": "Clave12345"
                             }"""))))
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> datos, HttpServletRequest request) {
-        if (!loginIntentos.permitir(request.getRemoteAddr(), datos.get("email"))) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest datos, HttpServletRequest request) {
+        if (!loginIntentos.permitir(request.getRemoteAddr(), datos.getEmail())) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, "300")
-                    .body(Map.of("status", 429, "message", "Demasiados intentos. Intenta de nuevo mas tarde",
-                            "timestamp", Instant.now().toString()));
+                    .body(error(HttpStatus.TOO_MANY_REQUESTS, "Demasiados intentos. Intenta de nuevo mas tarde"));
         }
-        return conSesion(HttpStatus.OK, authService.login(datos.get("email"), datos.get("password")));
+        return conSesion(HttpStatus.OK, authService.login(datos));
     }
 
     @Operation(summary = "Renovar la sesion: usa la cookie del refresh token y entrega un access token nuevo y un refresh nuevo (rotacion)")
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(
+    public ResponseEntity<?> refresh(
             @CookieValue(name = RefreshCookie.NOMBRE, required = false) String refreshToken) {
         try {
             return conSesion(HttpStatus.OK, authService.refrescar(refreshToken));
         } catch (SesionInvalidaException ex) {
             // Sesion perdida: se borra la cookie para que el navegador no siga enviando un token muerto
-            Map<String, Object> cuerpo = new LinkedHashMap<>();
-            cuerpo.put("status", HttpStatus.UNAUTHORIZED.value());
-            cuerpo.put("message", ex.getMessage());
-            cuerpo.put("timestamp", Instant.now().toString());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .header(HttpHeaders.SET_COOKIE, refreshCookie.borrar().toString())
-                    .body(cuerpo);
+                    .body(error(HttpStatus.UNAUTHORIZED, ex.getMessage()));
         }
     }
 
@@ -112,11 +110,16 @@ public class AuthController {
     }
 
     // El refresh token nunca va en el cuerpo: solo en la cookie HttpOnly
-    private ResponseEntity<Map<String, Object>> conSesion(HttpStatus status, Sesion sesion) {
+    private ResponseEntity<AuthResponse> conSesion(HttpStatus status, Sesion sesion) {
         return ResponseEntity.status(status)
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.crear(sesion.refreshToken(),
                         jwtService.leerRefreshClaims(sesion.refreshToken()).getExpiration().toInstant()).toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(sesion.cuerpo());
+    }
+
+    // Mismo formato de error que GlobalExceptionHandler: { status, message, timestamp }
+    private ErrorResponse error(HttpStatus status, String mensaje) {
+        return new ErrorResponse(status.value(), mensaje, Instant.now().toString(), null);
     }
 }

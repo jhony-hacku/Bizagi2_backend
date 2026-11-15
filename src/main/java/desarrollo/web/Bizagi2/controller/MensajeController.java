@@ -13,10 +13,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import desarrollo.web.Bizagi2.entities.Mensaje;
+import desarrollo.web.Bizagi2.dto.mensaje.MensajeRequest;
+import desarrollo.web.Bizagi2.dto.mensaje.MensajeResponse;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.MensajeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -27,29 +29,29 @@ public class MensajeController {
     private final MensajeService mensajeService;
 
     @GetMapping("/api/procesos/{procesoId}/mensajes")
-    public ResponseEntity<List<Mensaje>> listar(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<MensajeResponse>> listar(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer procesoId) {
-        return ResponseEntity.ok(mensajeService.listarPorProceso(procesoId, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(mensajeService.listarPorProcesoDto(procesoId, usuario.getEmpresa().getId()));
     }
 
-    // Body: nombre, origen: { id } (evento de lanzamiento o actividad ENVIO), destinoPool: { id }, contenido.
+    // Body: nombre, origenId (evento de lanzamiento o actividad ENVIO), destinoPoolId, contenido.
     // Si el pool destino es un SISTEMA_EXTERNO: tipoDestino (CORREO | SERVICIO_WEB | COLA), momento y
     // accionFallo (CONTINUAR_FLUJO | DERIVAR_A_MANEJO_ERROR | FINALIZAR_PROCESO).
     @PostMapping("/api/procesos/{procesoId}/mensajes")
-    public ResponseEntity<Mensaje> crear(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer procesoId, @RequestBody Mensaje datos) {
-        Mensaje creado = mensajeService.crear(procesoId, usuario, datos);
+    public ResponseEntity<MensajeResponse> crear(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer procesoId, @Valid @RequestBody MensajeRequest datos) {
+        MensajeResponse creado = mensajeService.crear(procesoId, usuario, datos);
         return ResponseEntity.created(URI.create("/api/mensajes/" + creado.getId())).body(creado);
     }
 
     @GetMapping("/api/mensajes/{id}")
-    public ResponseEntity<Mensaje> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
-        return ResponseEntity.ok(mensajeService.buscarPorId(id, usuario.getEmpresa().getId()));
+    public ResponseEntity<MensajeResponse> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
+        return ResponseEntity.ok(mensajeService.buscarPorIdDto(id, usuario.getEmpresa().getId()));
     }
 
     @PutMapping("/api/mensajes/{id}")
-    public ResponseEntity<Mensaje> actualizar(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody Mensaje datos) {
+    public ResponseEntity<MensajeResponse> actualizar(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody MensajeRequest datos) {
         return ResponseEntity.ok(mensajeService.actualizar(id, usuario, datos));
     }
 

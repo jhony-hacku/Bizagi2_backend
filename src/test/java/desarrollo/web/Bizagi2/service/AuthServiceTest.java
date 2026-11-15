@@ -7,9 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +14,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -62,30 +62,30 @@ class AuthServiceTest {
         when(jwtService.generarAccessToken(admin)).thenReturn("token.jwt.valido");
         when(refreshTokenService.iniciarFamilia(admin)).thenReturn("refresh.registro");
 
-        Map<String, String> datos = new HashMap<>();
-        datos.put("nombreEmpresa", "Tech SA");
-        datos.put("nit", "900111222");
-        datos.put("emailContacto", "info@tech.com");
-        datos.put("nombre", "Carlos Admin");
-        datos.put("email", "admin@tech.com");
-        datos.put("password", "Secure12345");
+        RegistroRequest datos = new RegistroRequest();
+        datos.setNombreEmpresa("Tech SA");
+        datos.setNit("900111222");
+        datos.setEmailContacto("info@tech.com");
+        datos.setNombre("Carlos Admin");
+        datos.setEmail("admin@tech.com");
+        datos.setPassword("Secure12345");
 
         AuthService.Sesion sesion = authService.registrar(datos);
-        Map<String, Object> respuesta = sesion.cuerpo();
+        AuthResponse respuesta = sesion.cuerpo();
 
         assertThat(sesion.refreshToken()).isEqualTo("refresh.registro");
-        assertThat(respuesta).doesNotContainKey("refreshToken");
-        assertThat(respuesta.get("token")).isEqualTo("token.jwt.valido");
-        assertThat(respuesta.get("usuarioId")).isEqualTo(10);
-        assertThat(respuesta.get("empresaId")).isEqualTo(1);
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.ADMINISTRADOR);
+        assertThat(respuesta).isNotNull();
+        assertThat(respuesta.getToken()).isEqualTo("token.jwt.valido");
+        assertThat(respuesta.getUsuarioId()).isEqualTo(10);
+        assertThat(respuesta.getEmpresaId()).isEqualTo(1);
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
     }
 
     @Test
     @DisplayName("HU-01 CA5: Registrar con campos faltantes lanza ReglaNegocioException")
     void registrar_camposFaltantes_lanzaReglaNegocio() {
-        Map<String, String> datos = new HashMap<>();
-        datos.put("nombreEmpresa", "Tech SA");
+        RegistroRequest datos = new RegistroRequest();
+        datos.setNombreEmpresa("Tech SA");
         // nit falta
 
         assertThatThrownBy(() -> authService.registrar(datos))
@@ -112,16 +112,16 @@ class AuthServiceTest {
         when(jwtService.getAccessExpirationMs()).thenReturn(900_000L);
         when(refreshTokenService.iniciarFamilia(usuario)).thenReturn("refresh.login.ok");
 
-        AuthService.Sesion sesion = authService.login("carlos@tech.com", "Password123");
-        Map<String, Object> respuesta = sesion.cuerpo();
+        AuthService.Sesion sesion = authService.login(new LoginRequest("carlos@tech.com", "Password123"));
+        AuthResponse respuesta = sesion.cuerpo();
 
         assertThat(sesion.refreshToken()).isEqualTo("refresh.login.ok");
-        assertThat(respuesta.get("tokenType")).isEqualTo("Bearer");
-        assertThat(respuesta.get("expiresIn")).isEqualTo(900L);
-        assertThat(respuesta.get("token")).isEqualTo("token.login.ok");
-        assertThat(respuesta.get("empresaId")).isEqualTo(1);
-        assertThat(respuesta.get("empresa")).isEqualTo("Tech SA");
-        assertThat(respuesta.get("rolAcceso")).isEqualTo(RolAcceso.EDITOR);
+        assertThat(respuesta.getTokenType()).isEqualTo("Bearer");
+        assertThat(respuesta.getExpiresIn()).isEqualTo(900L);
+        assertThat(respuesta.getToken()).isEqualTo("token.login.ok");
+        assertThat(respuesta.getEmpresaId()).isEqualTo(1);
+        assertThat(respuesta.getEmpresa()).isEqualTo("Tech SA");
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);
     }
 
     @Test
@@ -154,8 +154,7 @@ class AuthServiceTest {
         AuthService.Sesion sesion = authService.refrescar("refresh.viejo");
 
         assertThat(sesion.refreshToken()).isEqualTo("refresh.nuevo");
-        assertThat(sesion.cuerpo().get("token")).isEqualTo("access.nuevo");
-        assertThat(sesion.cuerpo()).doesNotContainKey("refreshToken");
+        assertThat(sesion.cuerpo().getToken()).isEqualTo("access.nuevo");
     }
 
     @Test

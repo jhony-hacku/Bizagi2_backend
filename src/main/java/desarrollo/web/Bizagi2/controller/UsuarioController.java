@@ -14,9 +14,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioCreateRequest;
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioResponse;
+import desarrollo.web.Bizagi2.dto.usuario.UsuarioUpdateRequest;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.UsuarioService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -29,30 +33,31 @@ public class UsuarioController {
 
     // Cualquier rol puede consultar su propio perfil
     @GetMapping("/me")
-    public ResponseEntity<Usuario> me(@AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(usuario);
+    public ResponseEntity<UsuarioResponse> me(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(usuarioService.aResponse(usuario));
     }
 
     // El resto de rutas son solo para el ADMINISTRADOR (ver SecurityConfig)
     @GetMapping
-    public ResponseEntity<List<Usuario>> listar(@AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(usuarioService.listar(usuario.getEmpresa().getId()));
+    public ResponseEntity<List<UsuarioResponse>> listar(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(usuarioService.listarDto(usuario.getEmpresa().getId()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Usuario> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
-        return ResponseEntity.ok(usuarioService.buscarPorId(id, usuario.getEmpresa().getId()));
+    public ResponseEntity<UsuarioResponse> buscar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
+        return ResponseEntity.ok(usuarioService.buscarPorIdDto(id, usuario.getEmpresa().getId()));
     }
 
     @PostMapping
-    public ResponseEntity<Usuario> crear(@AuthenticationPrincipal Usuario usuario, @RequestBody Usuario datos) {
-        Usuario creado = usuarioService.crear(usuario.getEmpresa().getId(), datos);
+    public ResponseEntity<UsuarioResponse> crear(@AuthenticationPrincipal Usuario usuario,
+            @Valid @RequestBody UsuarioCreateRequest datos) {
+        UsuarioResponse creado = usuarioService.crear(usuario.getEmpresa().getId(), datos);
         return ResponseEntity.created(URI.create("/api/usuarios/" + creado.getId())).body(creado);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Usuario> actualizar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id,
-            @RequestBody Usuario datos) {
+    public ResponseEntity<UsuarioResponse> actualizar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id,
+            @Valid @RequestBody UsuarioUpdateRequest datos) {
         return ResponseEntity.ok(usuarioService.actualizar(id, usuario.getEmpresa().getId(), datos));
     }
 
@@ -64,7 +69,7 @@ public class UsuarioController {
     }
 
     @PutMapping("/{id}/activar")
-    public ResponseEntity<Usuario> activar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
-        return ResponseEntity.ok(usuarioService.activar(id, usuario.getEmpresa().getId()));
+    public ResponseEntity<UsuarioResponse> activar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
+        return ResponseEntity.ok(usuarioService.activarDto(id, usuario.getEmpresa().getId()));
     }
 }

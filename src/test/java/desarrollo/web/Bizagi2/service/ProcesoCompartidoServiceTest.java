@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +20,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.proceso.EmpresaInvitadaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.ProcesoCompartidoResponse;
 import desarrollo.web.Bizagi2.entities.AccionHistorial;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.EstadoProceso;
@@ -92,10 +93,10 @@ class ProcesoCompartidoServiceTest {
             return pc;
         });
 
-        Map<String, Object> resultado = procesoCompartidoService.compartir(100, admin, "900222");
+        EmpresaInvitadaResponse resultado = procesoCompartidoService.compartir(100, admin, "900222");
 
-        assertThat(resultado.get("empresaId")).isEqualTo(2);
-        assertThat(resultado.get("empresa")).isEqualTo("Empresa B");
+        assertThat(resultado.getEmpresaId()).isEqualTo(2);
+        assertThat(resultado.getEmpresa()).isEqualTo("Empresa B");
         verify(historialService).registrar(eq(admin), eq(proceso), eq(AccionHistorial.COMPARTIR), eq("PROCESO"), eq(100), anyString());
     }
 
@@ -162,10 +163,10 @@ class ProcesoCompartidoServiceTest {
 
         when(procesoCompartidoRepository.findByEmpresaIdAndActivoTrue(2)).thenReturn(List.of(pc));
 
-        List<Map<String, Object>> lista = procesoCompartidoService.compartidosConmigo(2);
+        List<ProcesoCompartidoResponse> lista = procesoCompartidoService.compartidosConmigo(2);
 
         assertThat(lista).hasSize(1);
-        assertThat(lista.get(0).get("procesoId")).isEqualTo(88);
-        assertThat(lista.get(0).get("empresaPropietaria")).isEqualTo("Empresa A");
+        assertThat(lista.get(0).getProcesoId()).isEqualTo(88);
+        assertThat(lista.get(0).getEmpresaPropietaria()).isEqualTo("Empresa A");
     }
 }

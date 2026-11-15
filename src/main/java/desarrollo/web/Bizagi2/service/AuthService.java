@@ -2,12 +2,12 @@ package desarrollo.web.Bizagi2.service;
 
 import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
@@ -27,35 +27,37 @@ public class AuthService {
 
     // Lo que devuelve cada operacion de sesion: el cuerpo JSON (con el access token) y el refresh token,
     // que el controlador NO pone en el JSON sino en una cookie HttpOnly.
-    public record Sesion(Map<String, Object> cuerpo, String refreshToken) {
+    public record Sesion(AuthResponse cuerpo, String refreshToken) {
     }
 
     // HU-01: registra una empresa nueva junto con su usuario administrador inicial.
-    // Primero se validan todos los campos obligatorios y luego se crea todo; si algo falla
+    // Primero se validan todos los campos obligatorios y luego se crea todo.
+    // si algo falla
     // (NIT o email repetido...) no queda nada a medias.
-    public Sesion registrar(Map<String, String> datos) {
-        requerido(datos.get("nombreEmpresa"), "nombreEmpresa");
-        requerido(datos.get("nit"), "nit");
-        requerido(datos.get("emailContacto"), "emailContacto");
-        requerido(datos.get("nombre"), "nombre");
-        requerido(datos.get("email"), "email");
-        requerido(datos.get("password"), "password");
+    public Sesion registrar(RegistroRequest datos) {
+        requerido(datos.getNombreEmpresa(), "nombreEmpresa");
+        requerido(datos.getNit(), "nit");
+        requerido(datos.getEmailContacto(), "emailContacto");
+        requerido(datos.getNombre(), "nombre");
+        requerido(datos.getEmail(), "email");
+        requerido(datos.getPassword(), "password");
 
-        Empresa empresa = empresaService.crear(datos.get("nombreEmpresa"), datos.get("nit"),
-                datos.get("emailContacto"));
+        Empresa empresa = empresaService.crear(datos.getNombreEmpresa(), datos.getNit(),
+                datos.getEmailContacto());
 
         Usuario admin = new Usuario();
-        admin.setNombre(datos.get("nombre"));
-        admin.setEmail(datos.get("email"));
-        admin.setPassword(datos.get("password"));
+        admin.setNombre(datos.getNombre());
+        admin.setEmail(datos.getEmail());
+        admin.setPassword(datos.getPassword());
         admin.setRolAcceso(RolAcceso.ADMINISTRADOR);
 
         return abrirSesion(usuarioService.crear(empresa.getId(), admin));
     }
 
-    // Login: access token corto + refresh token largo (familia nueva)
-    public Sesion login(String email, String password) {
-        return abrirSesion(usuarioService.autenticar(email, password));
+    // Login: access token corto + refresh token largo (familia nueva).
+    // No es readOnly: guarda el refresh token y bloquea la fila del usuario.
+    public Sesion login(LoginRequest datos) {
+        return abrirSesion(usuarioService.autenticar(datos.getEmail(), datos.getPassword()));
     }
 
     // Renovacion: valida y rota el refresh token; entrega un access nuevo y un refresh nuevo.
@@ -80,17 +82,17 @@ public class AuthService {
         return new Sesion(cuerpo(usuario), refreshTokenService.iniciarFamilia(usuario));
     }
 
-    private Map<String, Object> cuerpo(Usuario usuario) {
-        Map<String, Object> respuesta = new LinkedHashMap<>();
-        respuesta.put("token", jwtService.generarAccessToken(usuario));
-        respuesta.put("tokenType", "Bearer");
-        respuesta.put("expiresIn", jwtService.getAccessExpirationMs() / 1000);
-        respuesta.put("usuarioId", usuario.getId());
-        respuesta.put("nombre", usuario.getNombre());
-        respuesta.put("email", usuario.getEmail());
-        respuesta.put("rolAcceso", usuario.getRolAcceso());
-        respuesta.put("empresaId", usuario.getEmpresa().getId());
-        respuesta.put("empresa", usuario.getEmpresa().getNombre());
-        return respuesta;
+    // El token no es parte de la entidad, por eso esta respuesta se arma a mano
+    private AuthResponse cuerpo(Usuario usuario) {
+        return new AuthResponse(
+                jwtService.generarAccessToken(usuario),
+                "Bearer",
+                jwtService.getAccessExpirationMs() / 1000,
+                usuario.getId(),
+                usuario.getNombre(),
+                usuario.getEmail(),
+                usuario.getRolAcceso(),
+                usuario.getEmpresa().getId(),
+                usuario.getEmpresa().getNombre());
     }
 }

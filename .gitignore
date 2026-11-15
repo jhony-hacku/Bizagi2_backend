@@ -34,3 +34,6 @@ build/
 
 ### Variables de entorno (credenciales) ###
 .env
+
+### JMeter ###
+*.jtl

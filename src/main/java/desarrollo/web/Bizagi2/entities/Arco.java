@@ -5,35 +5,42 @@ import org.hibernate.annotations.SQLRestriction;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import lombok.Data;
+import jakarta.persistence.Version;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "arcos")
 @SQLRestriction("activo = true")
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 public class Arco {
 
     @Id
+    @EqualsAndHashCode.Include
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "pool_id", nullable = false)
     private Pool pool;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "origen_id", nullable = false)
     private NodoFlujo origen;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "destino_id", nullable = false)
     private NodoFlujo destino;
 
@@ -45,4 +52,11 @@ public class Arco {
     @Column(nullable = false)
     @ColumnDefault("true")
     private boolean activo = true;
+
+    // Control de concurrencia optimista: si dos transacciones modifican la misma fila,
+    // la segunda falla con OptimisticLockException en lugar de sobrescribir los cambios
+    @Version
+    @Column(nullable = false)
+    @ColumnDefault("0")
+    private long version;
 }

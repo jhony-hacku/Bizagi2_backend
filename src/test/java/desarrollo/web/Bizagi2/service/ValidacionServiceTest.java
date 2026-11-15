@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +20,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import desarrollo.web.Bizagi2.dto.proceso.AdvertenciaResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
+import desarrollo.web.Bizagi2.entities.AccionFallo;
 import desarrollo.web.Bizagi2.entities.Actividad;
 import desarrollo.web.Bizagi2.entities.Arco;
 import desarrollo.web.Bizagi2.entities.Correlacion;
@@ -156,7 +158,7 @@ class ValidacionServiceTest {
     }
 
     /** Valida un proceso con un unico pool de la empresa. */
-    private List<Map<String, Object>> validarCon(List<Arco> arcos, List<Mensaje> mensajes, NodoFlujo... nodos) {
+    private List<AdvertenciaResponse> validarCon(List<Arco> arcos, List<Mensaje> mensajes, NodoFlujo... nodos) {
         when(poolRepository.findByProcesoId(1)).thenReturn(List.of(poolEmpresa));
         when(nodoFlujoRepository.findByPoolId(10)).thenReturn(List.of(nodos));
         when(arcoRepository.findByPoolId(10)).thenReturn(arcos);
@@ -165,7 +167,7 @@ class ValidacionServiceTest {
     }
 
     /** Gateway con una entrada y dos salidas con las condiciones indicadas. */
-    private List<Map<String, Object>> validarGatewayDivergente(TipoGateway tipo, String c1, String c2) {
+    private List<AdvertenciaResponse> validarGatewayDivergente(TipoGateway tipo, String c1, String c2) {
         Gateway g = gateway(200, tipo);
         Arco entrada = arco(501, actividad(100, "Entrada"), g, null);
         Arco salida1 = arco(502, g, actividad(101, "S1"), c1);
@@ -173,15 +175,14 @@ class ValidacionServiceTest {
         return validarCon(List.of(entrada, salida1, salida2), List.of(), g);
     }
 
-    private List<Map<String, Object>> con(List<Map<String, Object>> items, String fragmento) {
-        return items.stream().filter(i -> i.get("mensaje").toString().contains(fragmento)).toList();
+    private List<AdvertenciaResponse> con(List<AdvertenciaResponse> items, String fragmento) {
+        return items.stream().filter(i -> i.getMensaje().toString().contains(fragmento)).toList();
     }
 
-    private void assertItem(Map<String, Object> item, String nivel, String elemento, Integer id) {
-        assertThat(item)
-                .containsEntry("nivel", nivel)
-                .containsEntry("elemento", elemento)
-                .containsEntry("elementoId", id);
+    private void assertItem(AdvertenciaResponse item, String nivel, String elemento, Integer id) {
+        assertThat(item.getNivel()).isEqualTo(nivel);
+        assertThat(item.getElemento()).isEqualTo(elemento);
+        assertThat(item.getElementoId()).isEqualTo(id);
     }
 
     // =====================================================================
@@ -195,7 +196,7 @@ class ValidacionServiceTest {
         Actividad tarea = actividad(2, "Tarea");
         Evento fin = evento(3, "Fin", TipoEvento.FIN);
 
-        List<Map<String, Object>> items = validarCon(
+        List<AdvertenciaResponse> items = validarCon(
                 List.of(arco(10, inicio, tarea, null), arco(11, tarea, fin, null)), List.of(),
                 inicio, tarea, fin);
 
@@ -208,7 +209,7 @@ class ValidacionServiceTest {
         when(poolRepository.findByProcesoId(1)).thenReturn(List.of(poolExterno()));
         when(mensajeRepository.findByProcesoId(1)).thenReturn(List.of());
 
-        List<Map<String, Object>> items = validacionService.validar(proceso);
+        List<AdvertenciaResponse> items = validacionService.validar(proceso);
 
         assertThat(items).isEmpty();
         verify(nodoFlujoRepository, never()).findByPoolId(anyInt());
@@ -220,16 +221,16 @@ class ValidacionServiceTest {
     void validar_elementosDesconectados_generaAdvertencias() {
         Actividad aislada = actividad(101, "Tarea Desconectada");
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), aislada);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), aislada);
 
         assertThat(items).hasSize(2);
-        List<Map<String, Object>> entrada = con(items, "no tiene camino de entrada");
-        List<Map<String, Object>> salida = con(items, "no tiene camino de salida");
+        List<AdvertenciaResponse> entrada = con(items, "no tiene camino de entrada");
+        List<AdvertenciaResponse> salida = con(items, "no tiene camino de salida");
         assertThat(entrada).hasSize(1);
         assertThat(salida).hasSize(1);
         assertItem(entrada.get(0), ADVERTENCIA, "ACTIVIDAD", 101);
         assertItem(salida.get(0), ADVERTENCIA, "ACTIVIDAD", 101);
-        assertThat(entrada.get(0).get("mensaje")).isEqualTo("'Tarea Desconectada' no tiene camino de entrada");
+        assertThat(entrada.get(0).getMensaje()).isEqualTo("'Tarea Desconectada' no tiene camino de entrada");
     }
 
     @Test
@@ -237,11 +238,11 @@ class ValidacionServiceTest {
     void validar_eventoInicioSinEntrada_soloAdvierteSalida() {
         Evento inicio = evento(1, "Inicio", TipoEvento.INICIO);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), inicio);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), inicio);
 
         assertThat(items).hasSize(1);
         assertItem(items.get(0), ADVERTENCIA, "EVENTO", 1);
-        assertThat(items.get(0).get("mensaje").toString()).contains("no tiene camino de salida");
+        assertThat(items.get(0).getMensaje().toString()).contains("no tiene camino de salida");
     }
 
     @Test
@@ -249,7 +250,7 @@ class ValidacionServiceTest {
     void validar_mensajeRecepcionInicioSinEntrada_noAdvierteEntrada() {
         Evento catchInicio = receptor(1, "Solicitud", TipoEvento.MENSAJE_RECEPCION_INICIO, "clave", true);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), catchInicio);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), catchInicio);
 
         assertThat(con(items, "no tiene camino de entrada")).isEmpty();
         assertThat(con(items, "no tiene camino de salida")).hasSize(1);
@@ -260,11 +261,11 @@ class ValidacionServiceTest {
     void validar_eventoFinSinSalida_soloAdvierteEntrada() {
         Evento fin = evento(3, "Fin", TipoEvento.FIN);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), fin);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), fin);
 
         assertThat(items).hasSize(1);
         assertItem(items.get(0), ADVERTENCIA, "EVENTO", 3);
-        assertThat(items.get(0).get("mensaje").toString()).contains("no tiene camino de entrada");
+        assertThat(items.get(0).getMensaje().toString()).contains("no tiene camino de entrada");
     }
 
     @Test
@@ -274,11 +275,11 @@ class ValidacionServiceTest {
         Gateway g = gateway(2, TipoGateway.PARALELA);
         Evento e = evento(3, "Intermedio", TipoEvento.MENSAJE_LANZAMIENTO);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), a, g, e);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), a, g, e);
 
-        assertThat(con(items, "'Act' no tiene camino de entrada").get(0)).containsEntry("elemento", "ACTIVIDAD");
-        assertThat(con(items, "'Decision' no tiene camino de entrada").get(0)).containsEntry("elemento", "GATEWAY");
-        assertThat(con(items, "'Intermedio' no tiene camino de entrada").get(0)).containsEntry("elemento", "EVENTO");
+        assertThat(con(items, "'Act' no tiene camino de entrada").get(0).getElemento()).isEqualTo("ACTIVIDAD");
+        assertThat(con(items, "'Decision' no tiene camino de entrada").get(0).getElemento()).isEqualTo("GATEWAY");
+        assertThat(con(items, "'Intermedio' no tiene camino de entrada").get(0).getElemento()).isEqualTo("EVENTO");
     }
 
     // =====================================================================
@@ -291,9 +292,9 @@ class ValidacionServiceTest {
         Evento catchInicio = receptor(300, "Inicio por Mensaje", TipoEvento.MENSAJE_RECEPCION_INICIO, "clave", true);
         Arco entrante = arco(500, actividad(99, "Origen"), catchInicio, null);
 
-        List<Map<String, Object>> items = validarCon(List.of(entrante), List.of(), catchInicio);
+        List<AdvertenciaResponse> items = validarCon(List.of(entrante), List.of(), catchInicio);
 
-        List<Map<String, Object>> errores = con(items, "no puede tener arcos entrantes");
+        List<AdvertenciaResponse> errores = con(items, "no puede tener arcos entrantes");
         assertThat(errores).hasSize(1);
         assertItem(errores.get(0), ERROR, "EVENTO", 300);
     }
@@ -319,9 +320,9 @@ class ValidacionServiceTest {
         Evento intermedio = receptor(300, "Esperar respuesta", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "clave", true);
         Arco entrante = arco(500, actividad(99, "Origen"), intermedio, null);
 
-        List<Map<String, Object>> items = validarCon(List.of(entrante), List.of(), intermedio);
+        List<AdvertenciaResponse> items = validarCon(List.of(entrante), List.of(), intermedio);
 
-        assertThat(items).noneMatch(i -> ERROR.equals(i.get("nivel")));
+        assertThat(items).noneMatch(i -> ERROR.equals(i.getNivel()));
     }
 
     // =====================================================================
@@ -351,15 +352,15 @@ class ValidacionServiceTest {
     }
 
     @Test
-    @DisplayName("resultadoEliminacion informa los conteos y las advertencias, en ese orden")
+    @DisplayName("resultadoEliminacion informa los conteos y las advertencias")
     void resultadoEliminacion_sinAdvertencias_devuelveConteosYListaVacia() {
         when(poolRepository.findByProcesoId(1)).thenReturn(List.of());
 
-        Map<String, Object> resultado = validacionService.resultadoEliminacion(proceso, 3, 2);
+        EliminacionResponse resultado = validacionService.resultadoEliminacion(proceso, 3, 2);
 
-        assertThat(resultado.keySet()).containsExactly("arcosEliminados", "mensajesEliminados", "advertencias");
-        assertThat(resultado).containsEntry("arcosEliminados", 3).containsEntry("mensajesEliminados", 2);
-        assertThat((List<?>) resultado.get("advertencias")).isEmpty();
+        assertThat(resultado.getArcosEliminados()).isEqualTo(3);
+        assertThat(resultado.getMensajesEliminados()).isEqualTo(2);
+        assertThat(resultado.getAdvertencias()).isEmpty();
     }
 
     @Test
@@ -369,10 +370,11 @@ class ValidacionServiceTest {
         when(nodoFlujoRepository.findByPoolId(10)).thenReturn(List.of(actividad(1, "Huerfana")));
         when(arcoRepository.findByPoolId(10)).thenReturn(List.of());
 
-        Map<String, Object> resultado = validacionService.resultadoEliminacion(proceso, 1, 0);
+        EliminacionResponse resultado = validacionService.resultadoEliminacion(proceso, 1, 0);
 
-        assertThat(resultado).containsEntry("arcosEliminados", 1).containsEntry("mensajesEliminados", 0);
-        assertThat((List<?>) resultado.get("advertencias")).hasSize(2);
+        assertThat(resultado.getArcosEliminados()).isEqualTo(1);
+        assertThat(resultado.getMensajesEliminados()).isZero();
+        assertThat(resultado.getAdvertencias()).hasSize(2);
     }
 
     // =====================================================================
@@ -384,9 +386,9 @@ class ValidacionServiceTest {
     void validar_gatewayConMenosDeDosSalientes_generaError() {
         Gateway g = gateway(200, TipoGateway.EXCLUSIVA);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), g);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), g);
 
-        List<Map<String, Object>> errores = con(items, "debe tener al menos dos arcos salientes");
+        List<AdvertenciaResponse> errores = con(items, "debe tener al menos dos arcos salientes");
         assertThat(errores).hasSize(1);
         assertItem(errores.get(0), ERROR, "GATEWAY", 200);
     }
@@ -398,7 +400,7 @@ class ValidacionServiceTest {
         Arco entrada = arco(501, actividad(100, "Entrada"), g, null);
         Arco salida = arco(502, g, actividad(101, "Salida"), null);
 
-        List<Map<String, Object>> items = validarCon(List.of(entrada, salida), List.of(), g);
+        List<AdvertenciaResponse> items = validarCon(List.of(entrada, salida), List.of(), g);
 
         assertThat(con(items, "debe tener al menos dos arcos salientes")).hasSize(1);
     }
@@ -411,7 +413,7 @@ class ValidacionServiceTest {
         Arco entrada2 = arco(502, actividad(101, "E2"), g, null);
         Arco salida = arco(503, g, actividad(102, "S"), null);
 
-        List<Map<String, Object>> items = validarCon(List.of(entrada1, entrada2, salida), List.of(), g);
+        List<AdvertenciaResponse> items = validarCon(List.of(entrada1, entrada2, salida), List.of(), g);
 
         assertThat(items).isEmpty();
     }
@@ -423,7 +425,7 @@ class ValidacionServiceTest {
         Arco entrada1 = arco(501, actividad(100, "E1"), g, null);
         Arco entrada2 = arco(502, actividad(101, "E2"), g, null);
 
-        List<Map<String, Object>> items = validarCon(List.of(entrada1, entrada2), List.of(), g);
+        List<AdvertenciaResponse> items = validarCon(List.of(entrada1, entrada2), List.of(), g);
 
         assertThat(con(items, "debe tener al menos dos arcos salientes")).hasSize(1);
     }
@@ -432,22 +434,22 @@ class ValidacionServiceTest {
     @EnumSource(value = TipoGateway.class, names = { "EXCLUSIVA", "INCLUSIVA" })
     @DisplayName("HU-14 CA3 & CA4: Gateway exclusivo/inclusivo con salidas sin condicion genera un ERROR por arco")
     void validar_gatewayCondicionalSinCondiciones_generaErrorPorCadaArco(TipoGateway tipo) {
-        List<Map<String, Object>> items = validarGatewayDivergente(tipo, null, "");
+        List<AdvertenciaResponse> items = validarGatewayDivergente(tipo, null, "");
 
-        List<Map<String, Object>> errores = con(items, "debe tener una condicion");
+        List<AdvertenciaResponse> errores = con(items, "debe tener una condicion");
         assertThat(errores).hasSize(2);
         assertItem(errores.get(0), ERROR, "ARCO", 502);
         assertItem(errores.get(1), ERROR, "ARCO", 503);
-        assertThat(errores.get(0).get("mensaje"))
+        assertThat(errores.get(0).getMensaje())
                 .isEqualTo("El arco 502 que sale del gateway 'Decision' debe tener una condicion");
     }
 
     @Test
     @DisplayName("HU-14: Solo el arco sin condicion recibe el error; el que la tiene no")
     void validar_gatewayInclusivoUnArcoSinCondicion_erroraSoloEseArco() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.INCLUSIVA, "monto > 100", "   ");
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.INCLUSIVA, "monto > 100", "   ");
 
-        List<Map<String, Object>> errores = con(items, "debe tener una condicion");
+        List<AdvertenciaResponse> errores = con(items, "debe tener una condicion");
         assertThat(errores).hasSize(1);
         assertItem(errores.get(0), ERROR, "ARCO", 503);
     }
@@ -455,7 +457,7 @@ class ValidacionServiceTest {
     @Test
     @DisplayName("HU-14: Gateway paralelo no exige condiciones en sus arcos")
     void validar_gatewayParaleloSinCondiciones_noGeneraItems() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.PARALELA, null, null);
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.PARALELA, null, null);
 
         assertThat(items).isEmpty();
     }
@@ -463,7 +465,7 @@ class ValidacionServiceTest {
     @Test
     @DisplayName("HU-14/15: Gateway exclusivo con condiciones distintas es valido")
     void validar_gatewayExclusivoConCondicionesDistintas_noGeneraItems() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, "monto > 100",
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, "monto > 100",
                 "monto <= 100");
 
         assertThat(items).isEmpty();
@@ -472,19 +474,19 @@ class ValidacionServiceTest {
     @Test
     @DisplayName("HU-15: Gateway exclusivo con condiciones repetidas (ignorando mayusculas y espacios) genera ADVERTENCIA")
     void validar_gatewayExclusivoCondicionesRepetidas_generaAdvertencia() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, "Monto > 100",
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, "Monto > 100",
                 "  monto > 100 ");
 
-        List<Map<String, Object>> repetidas = con(items, "tiene condiciones repetidas");
+        List<AdvertenciaResponse> repetidas = con(items, "tiene condiciones repetidas");
         assertThat(repetidas).hasSize(1);
         assertItem(repetidas.get(0), ADVERTENCIA, "GATEWAY", 200);
-        assertThat(items).noneMatch(i -> ERROR.equals(i.get("nivel")));
+        assertThat(items).noneMatch(i -> ERROR.equals(i.getNivel()));
     }
 
     @Test
     @DisplayName("HU-15: Condiciones vacias en un exclusivo no cuentan como 'repetidas' (solo son error de condicion)")
     void validar_gatewayExclusivoCondicionesVacias_noSeConsideranRepetidas() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, null, null);
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.EXCLUSIVA, null, null);
 
         assertThat(con(items, "tiene condiciones repetidas")).isEmpty();
         assertThat(con(items, "debe tener una condicion")).hasSize(2);
@@ -493,7 +495,7 @@ class ValidacionServiceTest {
     @Test
     @DisplayName("HU-15: La regla de condiciones repetidas solo aplica a gateways exclusivos, no a inclusivos")
     void validar_gatewayInclusivoCondicionesRepetidas_noGeneraAdvertencia() {
-        List<Map<String, Object>> items = validarGatewayDivergente(TipoGateway.INCLUSIVA, "monto > 100", "monto > 100");
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.INCLUSIVA, "monto > 100", "monto > 100");
 
         assertThat(items).isEmpty();
     }
@@ -508,12 +510,12 @@ class ValidacionServiceTest {
         Mensaje m = mensaje(700, "Factura", poolEmpresa);
         correlacion(m, "nroFactura");
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m));
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m));
 
-        List<Map<String, Object>> sinReceptor = con(items, "queda sin receptor");
+        List<AdvertenciaResponse> sinReceptor = con(items, "queda sin receptor");
         assertThat(sinReceptor).hasSize(1);
         assertItem(sinReceptor.get(0), ADVERTENCIA, "MENSAJE", 700);
-        assertThat(sinReceptor.get(0).get("mensaje"))
+        assertThat(sinReceptor.get(0).getMensaje())
                 .isEqualTo("El mensaje 'Factura' queda sin receptor en el pool 'Empresa'");
     }
 
@@ -524,7 +526,7 @@ class ValidacionServiceTest {
         correlacion(m, "nroFactura");
         Evento receptor = receptor(300, "  factura ", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "nroFactura", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
         assertThat(con(items, "queda sin receptor")).isEmpty();
         assertThat(con(items, "No existe un mensaje lanzado")).isEmpty();
@@ -548,11 +550,11 @@ class ValidacionServiceTest {
         when(nodoFlujoRepository.findByPoolId(10)).thenReturn(List.of(receptor));
         when(mensajeRepository.findByProcesoId(1)).thenReturn(List.of(m));
 
-        List<Map<String, Object>> items = validacionService.validar(proceso);
+        List<AdvertenciaResponse> items = validacionService.validar(proceso);
 
-        List<Map<String, Object>> sinReceptor = con(items, "queda sin receptor");
+        List<AdvertenciaResponse> sinReceptor = con(items, "queda sin receptor");
         assertThat(sinReceptor).hasSize(1);
-        assertThat(sinReceptor.get(0).get("mensaje"))
+        assertThat(sinReceptor.get(0).getMensaje())
                 .isEqualTo("El mensaje 'Factura' queda sin receptor en el pool 'Otra'");
     }
 
@@ -562,7 +564,7 @@ class ValidacionServiceTest {
         Mensaje m = mensaje(700, "Factura", poolExterno());
         correlacion(m, "nroFactura");
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m));
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m));
 
         assertThat(items).isEmpty();
     }
@@ -576,11 +578,11 @@ class ValidacionServiceTest {
     void validar_mensajeSinCorrelacion_generaAdvertencia() {
         Mensaje m = mensaje(700, "Factura", poolExterno());
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m));
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m));
 
         assertThat(items).hasSize(1);
         assertItem(items.get(0), ADVERTENCIA, "MENSAJE", 700);
-        assertThat(items.get(0).get("mensaje")).isEqualTo("El mensaje 'Factura' no tiene clave de correlacion");
+        assertThat(items.get(0).getMensaje()).isEqualTo("El mensaje 'Factura' no tiene clave de correlacion");
     }
 
     @Test
@@ -591,9 +593,9 @@ class ValidacionServiceTest {
         correlacion(m1, "nroFactura");
         correlacion(m2, "NROFACTURA ");
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m1, m2));
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m1, m2));
 
-        List<Map<String, Object>> ambiguos = con(items, "es ambiguo");
+        List<AdvertenciaResponse> ambiguos = con(items, "es ambiguo");
         assertThat(ambiguos).hasSize(2);
         assertItem(ambiguos.get(0), ADVERTENCIA, "MENSAJE", 700);
         assertItem(ambiguos.get(1), ADVERTENCIA, "MENSAJE", 701);
@@ -607,7 +609,7 @@ class ValidacionServiceTest {
         correlacion(m1, "nroFactura");
         correlacion(m2, "nroPedido");
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m1, m2));
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m1, m2));
 
         assertThat(items).isEmpty();
     }
@@ -621,12 +623,12 @@ class ValidacionServiceTest {
     void validar_recepcionSinLanzamientoNiOrigenExterno_generaAdvertencia() {
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INICIO, "clave", null);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), receptor);
 
-        List<Map<String, Object>> sinOrigen = con(items, "No existe un mensaje lanzado");
+        List<AdvertenciaResponse> sinOrigen = con(items, "No existe un mensaje lanzado");
         assertThat(sinOrigen).hasSize(1);
         assertItem(sinOrigen.get(0), ADVERTENCIA, "EVENTO", 300);
-        assertThat(sinOrigen.get(0).get("mensaje")).isEqualTo(
+        assertThat(sinOrigen.get(0).getMensaje()).isEqualTo(
                 "No existe un mensaje lanzado con el nombre 'Factura' ni se marco el evento como de origen externo");
     }
 
@@ -635,7 +637,7 @@ class ValidacionServiceTest {
     void validar_recepcionOrigenExternoFalse_generaAdvertencia() {
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INICIO, "clave", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), receptor);
 
         assertThat(con(items, "No existe un mensaje lanzado")).hasSize(1);
     }
@@ -645,7 +647,7 @@ class ValidacionServiceTest {
     void validar_recepcionConOrigenExterno_noAdvierte() {
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INICIO, "clave", true);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), receptor);
 
         assertThat(con(items, "No existe un mensaje lanzado")).isEmpty();
     }
@@ -656,13 +658,13 @@ class ValidacionServiceTest {
         Evento sinClaveNula = receptor(300, "Uno", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, null, true);
         Evento sinClaveBlanca = receptor(301, "Dos", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "   ", true);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), sinClaveNula, sinClaveBlanca);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), sinClaveNula, sinClaveBlanca);
 
-        List<Map<String, Object>> sinClave = con(items, "Message Catch intermedio");
+        List<AdvertenciaResponse> sinClave = con(items, "Message Catch intermedio");
         assertThat(sinClave).hasSize(2);
         assertItem(sinClave.get(0), ADVERTENCIA, "EVENTO", 300);
         assertItem(sinClave.get(1), ADVERTENCIA, "EVENTO", 301);
-        assertThat(sinClave.get(0).get("mensaje"))
+        assertThat(sinClave.get(0).getMensaje())
                 .isEqualTo("El Message Catch intermedio 'Uno' no tiene clave de correlacion");
     }
 
@@ -671,7 +673,7 @@ class ValidacionServiceTest {
     void validar_recepcionInicioSinClave_noAdvierteClave() {
         Evento receptor = receptor(300, "Solicitud", TipoEvento.MENSAJE_RECEPCION_INICIO, null, true);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(), receptor);
 
         assertThat(con(items, "Message Catch intermedio")).isEmpty();
         assertThat(con(items, "clave de correlacion")).isEmpty();
@@ -684,12 +686,12 @@ class ValidacionServiceTest {
         correlacion(m, "nroFactura");
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "nroPedido", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
-        List<Map<String, Object>> noCoincide = con(items, "no coincide");
+        List<AdvertenciaResponse> noCoincide = con(items, "no coincide");
         assertThat(noCoincide).hasSize(1);
         assertItem(noCoincide.get(0), ADVERTENCIA, "EVENTO", 300);
-        assertThat(noCoincide.get(0).get("mensaje")).isEqualTo(
+        assertThat(noCoincide.get(0).getMensaje()).isEqualTo(
                 "La clave de correlacion de 'Factura' (nroPedido) no coincide con la del mensaje lanzado (nroFactura)");
     }
 
@@ -700,7 +702,7 @@ class ValidacionServiceTest {
         correlacion(m, "nroFactura");
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "  NROFACTURA ", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
         assertThat(con(items, "no coincide")).isEmpty();
     }
@@ -711,7 +713,7 @@ class ValidacionServiceTest {
         Mensaje m = mensaje(700, "Factura", poolExterno());
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "nroPedido", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
         assertThat(con(items, "no coincide")).isEmpty();
         assertThat(con(items, "El mensaje 'Factura' no tiene clave de correlacion")).hasSize(1);
@@ -724,7 +726,7 @@ class ValidacionServiceTest {
         correlacion(m, null);
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INTERMEDIO, "nroPedido", false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
         assertThat(con(items, "no coincide")).isEmpty();
     }
@@ -736,8 +738,62 @@ class ValidacionServiceTest {
         correlacion(m, "nroFactura");
         Evento receptor = receptor(300, "Factura", TipoEvento.MENSAJE_RECEPCION_INICIO, null, false);
 
-        List<Map<String, Object>> items = validarCon(List.of(), List.of(m), receptor);
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m), receptor);
 
         assertThat(con(items, "no coincide")).isEmpty();
+    }
+
+    // =====================================================================
+    // HU-16: ramificacion sin punto de decision
+    // =====================================================================
+
+    @Test
+    @DisplayName("HU-16: Una actividad que se divide en dos caminos sin gateway genera advertencia")
+    void validar_actividadConDosSalidasSinGateway_advierte() {
+        Evento inicio = evento(1, "Inicio", TipoEvento.INICIO);
+        Actividad revisar = actividad(2, "Revisar");
+        Actividad a = actividad(3, "Camino A");
+        Actividad b = actividad(4, "Camino B");
+        Evento fin = evento(5, "Fin", TipoEvento.FIN);
+
+        List<AdvertenciaResponse> items = validarCon(List.of(
+                arco(601, inicio, revisar, null),
+                arco(602, revisar, a, null),
+                arco(603, revisar, b, null),
+                arco(604, a, fin, null),
+                arco(605, b, fin, null)), List.of(), inicio, revisar, a, b, fin);
+
+        List<AdvertenciaResponse> ramificacion = con(items, "sin un gateway");
+        assertThat(ramificacion).hasSize(1);
+        assertItem(ramificacion.get(0), ADVERTENCIA, "ACTIVIDAD", 2);
+    }
+
+    @Test
+    @DisplayName("HU-16: Un gateway con dos salidas no genera la advertencia de ramificacion")
+    void validar_gatewayDivergente_noAdvierteRamificacion() {
+        List<AdvertenciaResponse> items = validarGatewayDivergente(TipoGateway.PARALELA, null, null);
+        assertThat(con(items, "sin un gateway")).isEmpty();
+    }
+
+    // =====================================================================
+    // HU-26: derivar a manejo de error
+    // =====================================================================
+
+    @Test
+    @DisplayName("HU-26: Mensaje que deriva a manejo de error sin actividad de error genera advertencia")
+    void validar_mensajeDerivaSinActividadError_advierte() {
+        Pool externo = new Pool();
+        externo.setId(11);
+        externo.setNombre("Pagos");
+        externo.setTipoParticipante(TipoParticipante.SISTEMA_EXTERNO);
+        Mensaje m = mensaje(700, "Cobro", externo);
+        m.setAccionFallo(AccionFallo.DERIVAR_A_MANEJO_ERROR);
+        correlacion(m, "factura");
+
+        List<AdvertenciaResponse> items = validarCon(List.of(), List.of(m));
+
+        List<AdvertenciaResponse> sinActividad = con(items, "no tiene actividad de error");
+        assertThat(sinActividad).hasSize(1);
+        assertItem(sinActividad.get(0), ADVERTENCIA, "MENSAJE", 700);
     }
 }

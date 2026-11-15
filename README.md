@@ -11,12 +11,16 @@ src/main/java/desarrollo/web/Bizagi2/
   entities/     Entidades JPA y enums (el modelo de la base de datos)
   repository/   Repositorios Spring Data JPA (uno por tabla)
   service/      Reglas de negocio y transacciones (uno por entidad)
-  controller/   Endpoints REST: solo interpretan HTTP y llaman al servicio
-  exception/    Excepciones de dominio y GlobalExceptionHandler
+  dto/          DTOs de entrada (*Request, con @Valid) y de salida (*Response), un paquete por recurso
+  config/       ModelMapperConfig: el ModelMapper que convierte entidad <-> DTO
+  controller/   Endpoints REST: reciben y devuelven DTOs, nunca entidades
+  exception/    Excepciones de dominio y GlobalExceptionHandler (ErrorResponse)
   security/     JWT, filtro de autenticacion y reglas por rol
 ```
 
-Flujo de una peticion: `controller -> service -> repository -> base de datos`. El controlador no toca el repositorio; el servicio aplica las reglas y resuelve las asociaciones.
+Flujo de una peticion: `controller (DTO + @Valid) -> service (DTO <-> entidad con ModelMapper) -> repository -> base de datos`. El controlador no toca el repositorio ni las entidades; el servicio aplica las reglas y resuelve las asociaciones.
+
+DTOs: cada recurso tiene su `XxxRequest` (lo que envia el cliente, con validaciones `@NotBlank`, `@NotNull`, `@Email`...) y su `XxxResponse` (lo que devuelve la API). Las relaciones viajan como ids planos (`rolProcesoId`, `origenId`, `destinoId`, `destinoPoolId`, `laneId`) y las respuestas nunca exponen la contrasena, `versionSesion` ni entidades anidadas. El mapeo usa `MatchingStrategies.STRICT` y los campos planos se declaran con `TypeMap` en `ModelMapperConfig`.
 
 ## Configuracion
 
@@ -144,14 +148,15 @@ Ambos responden con el access token (`token`, `tokenType`, `expiresIn` en segund
 POST /api/procesos                    { "nombre": "Aprobacion de credito", "descripcion": "...", "categoria": "Finanzas" }
 POST /api/roles-proceso               { "nombre": "Analista", "descripcion": "Analiza solicitudes" }
 POST /api/procesos/1/pools            { "nombre": "Cliente", "tipoParticipante": "CLIENTE" }
-POST /api/pools/1/lanes               { "rolProceso": { "id": 1 } }            (nombre opcional: por defecto el del rol)
+POST /api/pools/1/lanes               { "rolProcesoId": 1 }                    (nombre opcional: por defecto el del rol)
 POST /api/lanes/1/actividades         { "nombre": "Revisar solicitud", "tipo": "USUARIO", "posicionX": 10, "posicionY": 20 }
-PUT  /api/actividades/1               { "nombre": "Revisar", "tipo": "MANUAL", "lane": { "id": 2 } }
+PUT  /api/actividades/1               { "nombre": "Revisar", "tipo": "MANUAL", "laneId": 2 }
 POST /api/pools/1/gateways            { "nombre": "Aprobado?", "tipoGateway": "EXCLUSIVA" }
 PUT  /api/gateways/1                  { "nombre": "Aprobado?", "tipoGateway": "PARALELA" }     (el PUT lleva el cuerpo completo)
 POST /api/pools/1/eventos             { "nombre": "Inicio", "tipoEvento": "INICIO" }
-POST /api/pools/1/arcos               { "origen": { "id": 1 }, "destino": { "id": 2 }, "etiqueta": "si", "condicion": "monto <= 1000000" }
-POST /api/procesos/1/mensajes         { "nombre": "Aviso", "origen": { "id": 3 }, "destinoPool": { "id": 4 }, "tipoDestino": "CORREO" }
+POST /api/pools/1/arcos               { "origenId": 1, "destinoId": 2, "etiqueta": "si", "condicion": "monto <= 1000000" }
+POST /api/procesos/1/mensajes         { "nombre": "Aviso", "origenId": 3, "destinoPoolId": 4, "tipoDestino": "CORREO" }
+PUT  /api/mensajes/1                  { ..., "accionFallo": "DERIVAR_A_MANEJO_ERROR", "actividadErrorId": 7 }   (HU-26)
 POST /api/mensajes/1/correlacion      { "criterio": "numero de radicado", "accionSinCaso": "DESCARTAR" }
 PUT  /api/empresa                     { "nombre": "Acme", "nit": "900111", "emailContacto": "c@acme.com", "editorModificaEstructura": false }
 POST /api/procesos/1/compartir        { "nit": "800222" }
@@ -159,7 +164,7 @@ POST /api/procesos/1/compartir        { "nit": "800222" }
 
 Valores validos: `tipoParticipante` = `EMPRESA_PROPIETARIA | CLIENTE | PROVEEDOR | SISTEMA_EXTERNO`; `tipoActividad` (campo `tipo`) = `TAREA | USUARIO | MANUAL | SERVICIO | ENVIO`; `tipoGateway` = `EXCLUSIVA | PARALELA | INCLUSIVA`; `tipoEvento` = `INICIO | FIN | MENSAJE_LANZAMIENTO | MENSAJE_RECEPCION_INICIO | MENSAJE_RECEPCION_INTERMEDIO`; `tipoDestino` = `CORREO | SERVICIO_WEB | COLA`; `accionFallo` = `CONTINUAR_FLUJO | DERIVAR_A_MANEJO_ERROR | FINALIZAR_PROCESO`; `accionSinCaso` = `DESCARTAR | INICIAR_CASO_NUEVO`; `estado` = `BORRADOR | PUBLICADO`; `rolAcceso` = `ADMINISTRADOR | EDITOR | LECTOR`.
 
-Obligatorios: actividad (`nombre`, `tipo`), gateway (`nombre`, `tipoGateway`), evento (`nombre`, `tipoEvento`), mensaje (`nombre`, `origen.id`, `destinoPool.id`, y `tipoDestino` si el destino es un `SISTEMA_EXTERNO`), correlacion (`criterio`, `accionSinCaso`), lane (`rolProceso.id`). Los `PUT` llevan el cuerpo completo, no solo el campo que cambia.
+Obligatorios: actividad (`nombre`, `tipo`), gateway (`nombre`, `tipoGateway`), evento (`nombre`, `tipoEvento`), mensaje (`nombre`, `origenId`, `destinoPoolId`, y `tipoDestino` si el destino es un `SISTEMA_EXTERNO`; `actividadErrorId` si `accionFallo` es `DERIVAR_A_MANEJO_ERROR`), correlacion (`criterio`, `accionSinCaso`), arco (`origenId`, `destinoId`), lane (`rolProcesoId`), pool (`nombre`, `tipoParticipante`), proceso y rol (`nombre`). `posicionX` y `posicionY` son opcionales (0 por defecto). Los `PUT` llevan el cuerpo completo, no solo el campo que cambia.
 
 Respuestas: los `DELETE` responden `204` sin cuerpo, salvo actividades, gateways, eventos y arcos, que responden `200` con `{ arcosEliminados, mensajesEliminados, advertencias }`. Para comprobar un borrado logico se consulta el recurso y se ve `activo: false` (procesos, usuarios) o `404` (elementos del diagrama y roles). `GET /api/procesos/{id}/validacion` devuelve una lista de `{ nivel, elemento, elementoId, mensaje }` con `nivel` = `ERROR | ADVERTENCIA`.
 
@@ -235,7 +240,18 @@ logout ──► se revocan todos los refresh del usuario y se borra la cookie
 { "status": 404, "message": "Proceso no encontrado", "timestamp": "2026-09-28T03:10:35Z" }
 ```
 
+Si un DTO no pasa la validacion (`@Valid`), el `400` incluye el mensaje de cada campo:
+
+```json
+{ "status": 400, "message": "La solicitud tiene campos invalidos", "timestamp": "...",
+  "errores": { "nombre": "El nombre es obligatorio", "tipoParticipante": "El tipo de participante es obligatorio" } }
+```
+
 `400` datos invalidos o regla de negocio, `401` sin token o credenciales invalidas, `403` sin permiso para la accion, `404` no existe (o es de otra empresa), `409` duplicado o elemento en uso.
+
+## Probar los endpoints con Postman
+
+`postman/Bizagi2_endpoints_DTO.postman_collection.json` recorre los 71 endpoints de la API en el orden de las historias de usuario (130 peticiones, incluidos los casos de error y de validacion). Importarla en Postman, levantar la API y ejecutar **Run collection** en orden: cada peticion guarda los ids que necesitan las siguientes. Genera NIT y correos unicos en cada ejecucion, asi que se puede repetir sin reiniciar la base. Para probar un endpoint suelto, basta con ejecutar antes las peticiones que crean lo que necesita (por ejemplo 01.1 y 04.1 antes de los pools).
 
 ## Si ya tenias la base de datos creada con una version anterior
 
@@ -247,6 +263,36 @@ CREATE DATABASE bizagi2;
 ```
 
 La tabla `historial_procesos` de la version anterior ya no se usa (ahora es `historial`).
+
+Si solo quieres conservar los datos actuales, la columna nueva de HU-26 (actividad de error de un mensaje) se agrega asi; con `ddl-auto=update` Hibernate la crea sola, pero el perfil prod usa `validate`:
+
+```sql
+ALTER TABLE mensajes ADD COLUMN actividad_error_id INTEGER REFERENCES nodos_flujo(id);
+```
+
+Las entidades usan control de concurrencia optimista (`@Version`) y dos restricciones de unicidad nuevas. En una base existente con `validate` se agregan asi:
+
+```sql
+-- Columna de version (@Version) en las entidades editables
+ALTER TABLE empresas ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE procesos ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE pools ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE lanes ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE roles_proceso ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE nodos_flujo ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE arcos ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE mensajes ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE correlaciones ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+
+-- Un NIT por empresa y una correlacion por mensaje
+ALTER TABLE empresas ADD CONSTRAINT uk_empresas_nit UNIQUE (nit);
+ALTER TABLE correlaciones ADD CONSTRAINT uk_correlaciones_mensaje UNIQUE (mensaje_id);
+ALTER TABLE procesos_compartidos ADD CONSTRAINT uk_proceso_compartido_empresa UNIQUE (proceso_id, empresa_id);
+
+-- actividadesUsuarias de un evento ahora es @ManyToMany: la tabla intermedia gana su FK hacia la actividad
+ALTER TABLE evento_actividades_usuarias ADD CONSTRAINT fk_evento_actividad FOREIGN KEY (actividad_id) REFERENCES nodos_flujo(id);
+```
 
 Esta version agrega la tabla `refresh_tokens`. Con `ddl-auto=update` se crea sola; con el perfil `prod` (`validate`) hay que crearla antes de desplegar o arrancar una vez con `DDL_AUTO=update`. La propiedad `jwt.expiration-ms` se reemplazo por `jwt.access-expiration-ms` y `jwt.refresh-expiration-ms`.
 

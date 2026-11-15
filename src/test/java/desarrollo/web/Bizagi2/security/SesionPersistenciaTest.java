@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
@@ -16,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
+import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.SesionInvalidaException;
 import desarrollo.web.Bizagi2.repository.UsuarioRepository;
@@ -36,8 +37,8 @@ class SesionPersistenciaTest {
     @Test
     void loginBloqueaUsuarioYEmiteTokensConLaVersionActual() {
         var sesion = registrar();
-        var nueva = auth.login((String) sesion.cuerpo().get("email"), "Password123!");
-        assertThat(nueva.cuerpo().get("usuarioId")).isEqualTo(sesion.cuerpo().get("usuarioId"));
+        var nueva = auth.login(new LoginRequest(sesion.cuerpo().getEmail(), "Password123!"));
+        assertThat(nueva.cuerpo().getUsuarioId()).isEqualTo(sesion.cuerpo().getUsuarioId());
         assertThat(jwt.leerRefreshClaims(nueva.refreshToken()).get("v", Integer.class)).isZero();
     }
 
@@ -50,7 +51,7 @@ class SesionPersistenciaTest {
         cambios.setPassword("OtraPassword123!");
         usuarios.actualizar(usuario.getId(), usuario.getEmpresa().getId(), cambios);
         assertThat(usuario(sesion).getVersionSesion()).isEqualTo(version + 1);
-        assertThat(jwt.leerAccessClaims((String) sesion.cuerpo().get("token")).get("v", Integer.class))
+        assertThat(jwt.leerAccessClaims(sesion.cuerpo().getToken()).get("v", Integer.class))
                 .isNotEqualTo(usuario(sesion).getVersionSesion());
         assertInvalido(sesion.refreshToken());
         assertThat(refreshRepository.findByJti(jwt.leerRefreshClaims(sesion.refreshToken()).getId())).isEmpty();
@@ -152,13 +153,12 @@ class SesionPersistenciaTest {
 
     private AuthService.Sesion registrar() {
         String id = UUID.randomUUID().toString();
-        return auth.registrar(Map.of("nombreEmpresa", "JWT " + id, "nit", id,
-                "emailContacto", "contacto@example.com", "nombre", "Prueba JWT",
-                "email", id + "@example.com", "password", "Password123!"));
+        return auth.registrar(new RegistroRequest("JWT " + id, id, "contacto@example.com",
+                "Prueba JWT", id + "@example.com", "Password123!"));
     }
 
     private Usuario usuario(AuthService.Sesion sesion) {
-        return usuarioRepository.findById((Integer) sesion.cuerpo().get("usuarioId")).orElseThrow();
+        return usuarioRepository.findById(sesion.cuerpo().getUsuarioId()).orElseThrow();
     }
 
     private void assertInvalido(String token) {

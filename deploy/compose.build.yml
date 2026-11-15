@@ -1,0 +1,13 @@
+# Complemento para construir las imagenes desde el codigo fuente (uso local).
+# Las rutas son relativas a esta carpeta (deploy/).
+# Asume que el repo del front esta clonado junto al del backend; si no,
+# define FRONT_CONTEXT en .env con la ruta correcta.
+
+services:
+  backend:
+    build:
+      context: ..
+
+  front:
+    build:
+      context: ${FRONT_CONTEXT:-../../Bizagi2_front}

@@ -1044,7 +1044,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"nombre\": \"Analisis\", \"rolProceso\": { \"id\": {{rolProcesoId}} } }"
+       "raw": "{ \"nombre\": \"Analisis\", \"rolProcesoId\": {{rolProcesoId}} }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/lanes",
@@ -1083,7 +1083,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"nombre\": \"Aprobacion\", \"rolProceso\": { \"id\": {{rolProceso2Id}} } }"
+       "raw": "{ \"nombre\": \"Aprobacion\", \"rolProcesoId\": {{rolProceso2Id}} }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/lanes",
@@ -1584,7 +1584,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"origen\": { \"id\": {{eventoInicioId}} }, \"destino\": { \"id\": {{actividadId}} } }"
+       "raw": "{ \"origenId\": {{eventoInicioId}}, \"destinoId\": {{actividadId}} }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/arcos",
@@ -1623,7 +1623,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"origen\": { \"id\": {{actividadId}} }, \"destino\": { \"id\": {{gatewayId}} } }"
+       "raw": "{ \"origenId\": {{actividadId}}, \"destinoId\": {{gatewayId}} }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/arcos",
@@ -1662,7 +1662,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"origen\": { \"id\": {{gatewayId}} }, \"destino\": { \"id\": {{actividad2Id}} }, \"condicion\": \"Monto <= 10M\" }"
+       "raw": "{ \"origenId\": {{gatewayId}}, \"destinoId\": {{actividad2Id}}, \"condicion\": \"Monto <= 10M\" }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/arcos",
@@ -1700,7 +1700,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"origen\": { \"id\": {{actividadId}} }, \"destino\": { \"id\": {{actividadId}} } }"
+       "raw": "{ \"origenId\": {{actividadId}}, \"destinoId\": {{actividadId}} }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/pools/{{poolId}}/arcos",
@@ -1738,7 +1738,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"origen\": { \"id\": {{eventoInicioId}} }, \"destino\": { \"id\": {{actividadId}} }, \"etiqueta\": \"Flujo principal\" }"
+       "raw": "{ \"origenId\": {{eventoInicioId}}, \"destinoId\": {{actividadId}}, \"etiqueta\": \"Flujo principal\" }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/arcos/{{arcoId}}",
@@ -1781,7 +1781,7 @@
       ],
       "body": {
        "mode": "raw",
-       "raw": "{ \"nombre\": \"Solicitud de verificacion\", \"origen\": { \"id\": {{actividad3Id}} }, \"destinoPool\": { \"id\": {{poolExternoId}} }, \"tipoDestino\": \"SERVICIO_WEB\" }"
+       "raw": "{ \"nombre\": \"Solicitud de verificacion\", \"origenId\": {{actividad3Id}}, \"destinoPoolId\": {{poolExternoId}}, \"tipoDestino\": \"SERVICIO_WEB\" }"
       },
       "url": {
        "raw": "{{baseUrl}}/api/procesos/{{procesoId}}/mensajes",

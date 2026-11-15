@@ -2,7 +2,6 @@ package desarrollo.web.Bizagi2.controller;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,12 +13,18 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import desarrollo.web.Bizagi2.entities.Actividad;
-import desarrollo.web.Bizagi2.entities.Evento;
-import desarrollo.web.Bizagi2.entities.Gateway;
+import desarrollo.web.Bizagi2.dto.nodo.ActividadCreateRequest;
+import desarrollo.web.Bizagi2.dto.nodo.ActividadResponse;
+import desarrollo.web.Bizagi2.dto.nodo.ActividadUpdateRequest;
+import desarrollo.web.Bizagi2.dto.nodo.EventoRequest;
+import desarrollo.web.Bizagi2.dto.nodo.EventoResponse;
+import desarrollo.web.Bizagi2.dto.nodo.GatewayRequest;
+import desarrollo.web.Bizagi2.dto.nodo.GatewayResponse;
+import desarrollo.web.Bizagi2.dto.proceso.EliminacionResponse;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.NodoFlujoService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 // Actividades, gateways y eventos: los nodos del diagrama.
@@ -34,35 +39,35 @@ public class NodoFlujoController {
     // ---------- Actividades ----------
 
     @GetMapping("/api/pools/{poolId}/actividades")
-    public ResponseEntity<List<Actividad>> listarActividades(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<ActividadResponse>> listarActividades(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer poolId) {
-        return ResponseEntity.ok(nodoFlujoService.listarActividades(poolId, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(nodoFlujoService.listarActividadesDto(poolId, usuario.getEmpresa().getId()));
     }
 
     // Se crea dentro de una lane. Body: nombre, tipo (TAREA | USUARIO | MANUAL | SERVICIO | ENVIO),
     // descripcion, posicionX, posicionY. El responsable es el rol de la lane.
     @PostMapping("/api/lanes/{laneId}/actividades")
-    public ResponseEntity<Actividad> crearActividad(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer laneId, @RequestBody Actividad datos) {
-        Actividad creada = nodoFlujoService.crearActividad(laneId, usuario, datos);
+    public ResponseEntity<ActividadResponse> crearActividad(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer laneId, @Valid @RequestBody ActividadCreateRequest datos) {
+        ActividadResponse creada = nodoFlujoService.crearActividad(laneId, usuario, datos);
         return ResponseEntity.created(URI.create("/api/actividades/" + creada.getId())).body(creada);
     }
 
     @GetMapping("/api/actividades/{id}")
-    public ResponseEntity<Actividad> buscarActividad(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<ActividadResponse> buscarActividad(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
-        return ResponseEntity.ok(nodoFlujoService.buscarActividad(id, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(nodoFlujoService.buscarActividadDto(id, usuario.getEmpresa().getId()));
     }
 
-    // Se puede cambiar nombre, tipo, posicion y lane (otra lane del mismo pool)
+    // Se puede cambiar nombre, tipo, posicion y laneId (otra lane del mismo pool)
     @PutMapping("/api/actividades/{id}")
-    public ResponseEntity<Actividad> actualizarActividad(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody Actividad datos) {
+    public ResponseEntity<ActividadResponse> actualizarActividad(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody ActividadUpdateRequest datos) {
         return ResponseEntity.ok(nodoFlujoService.actualizarActividad(id, usuario, datos));
     }
 
     @DeleteMapping("/api/actividades/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarActividad(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<EliminacionResponse> eliminarActividad(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
         return ResponseEntity.ok(nodoFlujoService.eliminarActividad(id, usuario));
     }
@@ -70,34 +75,34 @@ public class NodoFlujoController {
     // ---------- Gateways ----------
 
     @GetMapping("/api/pools/{poolId}/gateways")
-    public ResponseEntity<List<Gateway>> listarGateways(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<GatewayResponse>> listarGateways(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer poolId) {
-        return ResponseEntity.ok(nodoFlujoService.listarGateways(poolId, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(nodoFlujoService.listarGatewaysDto(poolId, usuario.getEmpresa().getId()));
     }
 
     // Body: nombre, tipoGateway (EXCLUSIVA | PARALELA | INCLUSIVA), posicionX, posicionY
     @PostMapping("/api/pools/{poolId}/gateways")
-    public ResponseEntity<Gateway> crearGateway(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer poolId, @RequestBody Gateway datos) {
-        Gateway creado = nodoFlujoService.crearGateway(poolId, usuario, datos);
+    public ResponseEntity<GatewayResponse> crearGateway(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer poolId, @Valid @RequestBody GatewayRequest datos) {
+        GatewayResponse creado = nodoFlujoService.crearGateway(poolId, usuario, datos);
         return ResponseEntity.created(URI.create("/api/gateways/" + creado.getId())).body(creado);
     }
 
     @GetMapping("/api/gateways/{id}")
-    public ResponseEntity<Gateway> buscarGateway(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<GatewayResponse> buscarGateway(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
-        return ResponseEntity.ok(nodoFlujoService.buscarGateway(id, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(nodoFlujoService.buscarGatewayDto(id, usuario.getEmpresa().getId()));
     }
 
     // Al pasar a PARALELA se eliminan las condiciones de sus arcos salientes
     @PutMapping("/api/gateways/{id}")
-    public ResponseEntity<Gateway> actualizarGateway(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody Gateway datos) {
+    public ResponseEntity<GatewayResponse> actualizarGateway(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody GatewayRequest datos) {
         return ResponseEntity.ok(nodoFlujoService.actualizarGateway(id, usuario, datos));
     }
 
     @DeleteMapping("/api/gateways/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarGateway(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<EliminacionResponse> eliminarGateway(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
         return ResponseEntity.ok(nodoFlujoService.eliminarGateway(id, usuario));
     }
@@ -105,9 +110,9 @@ public class NodoFlujoController {
     // ---------- Eventos ----------
 
     @GetMapping("/api/pools/{poolId}/eventos")
-    public ResponseEntity<List<Evento>> listarEventos(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<List<EventoResponse>> listarEventos(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer poolId) {
-        return ResponseEntity.ok(nodoFlujoService.listarEventos(poolId, usuario.getEmpresa().getId()));
+        return ResponseEntity.ok(nodoFlujoService.listarEventosDto(poolId, usuario.getEmpresa().getId()));
     }
 
     // Body: nombre, tipoEvento (INICIO | FIN | MENSAJE_LANZAMIENTO | MENSAJE_RECEPCION_INICIO |
@@ -115,25 +120,25 @@ public class NodoFlujoController {
     // se documentan contenido y claveCorrelacion. Solo en los de recepcion: origenExterno y actividadesUsuarias
     // (ids de las actividades que usan los datos recibidos).
     @PostMapping("/api/pools/{poolId}/eventos")
-    public ResponseEntity<Evento> crearEvento(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer poolId, @RequestBody Evento datos) {
-        Evento creado = nodoFlujoService.crearEvento(poolId, usuario, datos);
+    public ResponseEntity<EventoResponse> crearEvento(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer poolId, @Valid @RequestBody EventoRequest datos) {
+        EventoResponse creado = nodoFlujoService.crearEvento(poolId, usuario, datos);
         return ResponseEntity.created(URI.create("/api/eventos/" + creado.getId())).body(creado);
     }
 
     @GetMapping("/api/eventos/{id}")
-    public ResponseEntity<Evento> buscarEvento(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
-        return ResponseEntity.ok(nodoFlujoService.buscarEvento(id, usuario.getEmpresa().getId()));
+    public ResponseEntity<EventoResponse> buscarEvento(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id) {
+        return ResponseEntity.ok(nodoFlujoService.buscarEventoDto(id, usuario.getEmpresa().getId()));
     }
 
     @PutMapping("/api/eventos/{id}")
-    public ResponseEntity<Evento> actualizarEvento(@AuthenticationPrincipal Usuario usuario,
-            @PathVariable Integer id, @RequestBody Evento datos) {
+    public ResponseEntity<EventoResponse> actualizarEvento(@AuthenticationPrincipal Usuario usuario,
+            @PathVariable Integer id, @Valid @RequestBody EventoRequest datos) {
         return ResponseEntity.ok(nodoFlujoService.actualizarEvento(id, usuario, datos));
     }
 
     @DeleteMapping("/api/eventos/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarEvento(@AuthenticationPrincipal Usuario usuario,
+    public ResponseEntity<EliminacionResponse> eliminarEvento(@AuthenticationPrincipal Usuario usuario,
             @PathVariable Integer id) {
         return ResponseEntity.ok(nodoFlujoService.eliminarEvento(id, usuario));
     }

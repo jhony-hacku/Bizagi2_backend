@@ -8,10 +8,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import desarrollo.web.Bizagi2.entities.Empresa;
+import desarrollo.web.Bizagi2.dto.empresa.EmpresaRequest;
+import desarrollo.web.Bizagi2.dto.empresa.EmpresaResponse;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.service.EmpresaService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -23,12 +25,13 @@ public class EmpresaController {
     private final EmpresaService empresaService;
 
     @GetMapping
-    public ResponseEntity<Empresa> miEmpresa(@AuthenticationPrincipal Usuario usuario) {
-        return ResponseEntity.ok(empresaService.buscarPorId(usuario.getEmpresa().getId()));
+    public ResponseEntity<EmpresaResponse> miEmpresa(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(empresaService.buscarPorIdDto(usuario.getEmpresa().getId()));
     }
 
     @PutMapping
-    public ResponseEntity<Empresa> actualizar(@AuthenticationPrincipal Usuario usuario, @RequestBody Empresa datos) {
+    public ResponseEntity<EmpresaResponse> actualizar(@AuthenticationPrincipal Usuario usuario,
+            @Valid @RequestBody EmpresaRequest datos) {
         return ResponseEntity.ok(empresaService.actualizar(usuario.getEmpresa().getId(), datos));
     }
 }
