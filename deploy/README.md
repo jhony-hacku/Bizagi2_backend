@@ -15,6 +15,9 @@ docker compose -f compose.yml -f compose.build.yml up --build -d
 
 Abre http://localhost:8080. Para ver logs: `docker compose logs -f backend`.
 
+Como en local se entra por HTTP, pon `JWT_REFRESH_COOKIE_SECURE=false` en el `.env`; con el valor por defecto
+(`true`) el navegador no envia las cookies de sesion y no se puede iniciar sesion.
+
 ## En un servidor (usa las imagenes publicadas en GHCR)
 
 ```bash

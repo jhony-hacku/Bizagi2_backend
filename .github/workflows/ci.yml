@@ -3,6 +3,7 @@ name: CI - Build, Test & Sonar
 on:
   push:
     branches: [master, main, develop]
+    tags: ['v*']
   pull_request:
     branches: [master, main, develop]
   workflow_dispatch:
@@ -87,8 +88,10 @@ jobs:
       # Reutiliza target/ del paso anterior (no vuelve a compilar).
       # El token se lee de la variable SONAR_TOKEN, no se pasa por linea de comandos.
       # qualitygate.wait: el workflow falla si el Quality Gate no pasa.
+      # El plan gratuito de SonarCloud solo analiza la rama principal y los pull requests,
+      # asi que en push a develop o a un tag se omite (ese codigo ya paso el Quality Gate en su PR).
       - name: Analisis SonarCloud
-        if: ${{ env.SONAR_TOKEN != '' }}
+        if: ${{ env.SONAR_TOKEN != '' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') }}
         run: mvn -B sonar:sonar -Dsonar.qualitygate.wait=true
 
   docker-build:
@@ -96,13 +99,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-test-sonar
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write   # necesario para publicar la imagen en GHCR
 
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Build de la imagen
-        run: docker build -t bizagi2-backend:${{ github.sha }} .
+        run: >-
+          docker build
+          --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          -t bizagi2-backend:${{ github.sha }} .
 
       # Smoke test con PostgreSQL 17 y flujo completo de autenticacion
       - name: Smoke test con PostgreSQL y flujo Auth E2E
@@ -201,3 +211,26 @@ jobs:
 
           echo "=== Smoke Test E2E completado con exito ==="
           python3 scripts/jwt_smoke.py --base-url http://localhost:8080/api
+
+      # Solo se publica la imagen que ya paso tests y smoke test. Los pull requests no publican.
+      #   develop        -> :develop  (staging)
+      #   master / main  -> :latest
+      #   tag vX.Y.Z     -> :X.Y.Z    (produccion)
+      # Ademas siempre :sha-<commit>, para poder volver a una version exacta.
+      - name: Publicar imagen en GHCR
+        if: github.event_name == 'push'
+        env:
+          IMAGEN: ghcr.io/jhony-hacku/bizagi2-backend
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          TAGS="sha-${GITHUB_SHA::7}"
+          case "$GITHUB_REF" in
+            refs/heads/develop)                TAGS="$TAGS develop" ;;
+            refs/heads/master|refs/heads/main) TAGS="$TAGS latest" ;;
+            refs/tags/v*)                      TAGS="$TAGS ${GITHUB_REF_NAME#v}" ;;
+          esac
+          for TAG in $TAGS; do
+            docker tag "bizagi2-backend:${GITHUB_SHA}" "$IMAGEN:$TAG"
+            docker push "$IMAGEN:$TAG"
+          done
