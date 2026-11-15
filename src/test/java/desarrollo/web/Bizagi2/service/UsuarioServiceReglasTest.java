@@ -4,6 +4,7 @@ import static desarrollo.web.Bizagi2.service.DatosDto.EMPRESA_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.ConflictoDominioException;
 import desarrollo.web.Bizagi2.exception.RecursoNoEncontradoException;
+import desarrollo.web.Bizagi2.repository.RefreshTokenRepository;
 import desarrollo.web.Bizagi2.repository.UsuarioRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +39,9 @@ class UsuarioServiceReglasTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private ModelMapper modelMapper;
+    // Cambiar la contrasena cierra las sesiones abiertas del usuario
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -61,7 +66,7 @@ class UsuarioServiceReglasTest {
     }
 
     private void usuarioExistente(Usuario usuario) {
-        when(usuarioRepository.findById(usuario.getId())).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.buscarParaActualizar(usuario.getId())).thenReturn(Optional.of(usuario));
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
     }
 
@@ -90,6 +95,9 @@ class UsuarioServiceReglasTest {
         assertThat(editado.getEmail()).isEqualTo("luis.m@acme.com");
         assertThat(editado.getPassword()).isEqualTo("$hash");
         assertThat(editado.getRolAcceso()).isEqualTo(RolAcceso.LECTOR);
+        // La contrasena nueva invalida los tokens ya emitidos
+        assertThat(editado.getVersionSesion()).isEqualTo(1);
+        verify(refreshTokenRepository).eliminarDeUsuario(2);
     }
 
     @Test
@@ -106,7 +114,7 @@ class UsuarioServiceReglasTest {
     @Test
     @DisplayName("No se puede usar el email de otro usuario")
     void emailDuplicado() {
-        when(usuarioRepository.findById(2)).thenReturn(Optional.of(editor));
+        when(usuarioRepository.buscarParaActualizar(2)).thenReturn(Optional.of(editor));
         when(usuarioRepository.existsByEmail("ana@acme.com")).thenReturn(true);
 
         assertThatThrownBy(() -> usuarioService.actualizar(2, EMPRESA_ID, cambios(null, "ana@acme.com", null, null)))
@@ -117,7 +125,7 @@ class UsuarioServiceReglasTest {
     @DisplayName("El unico administrador activo no puede dejar de serlo")
     void ultimoAdministrador() {
         Usuario admin = DatosDto.usuario();
-        when(usuarioRepository.findById(1)).thenReturn(Optional.of(admin));
+        when(usuarioRepository.buscarParaActualizar(1)).thenReturn(Optional.of(admin));
         when(usuarioRepository.findByEmpresaId(EMPRESA_ID)).thenReturn(List.of(admin, editor));
 
         assertThatThrownBy(() -> usuarioService.actualizar(1, EMPRESA_ID, cambios(null, null, null, RolAcceso.EDITOR)))

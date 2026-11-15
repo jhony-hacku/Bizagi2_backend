@@ -43,6 +43,17 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("SesionInvalidaException -> 401 UNAUTHORIZED")
+    void testSesionInvalida() {
+        SesionInvalidaException ex = new SesionInvalidaException("Sesion invalida o vencida");
+        ResponseEntity<ErrorResponse> response = handler.sesionInvalida(ex);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals(401, response.getBody().getStatus());
+        assertEquals("Sesion invalida o vencida", response.getBody().getMessage());
+    }
+
+    @Test
     @DisplayName("ConflictoDominioException -> 409 CONFLICT")
     void testConflictoDominio() {
         ConflictoDominioException ex = new ConflictoDominioException("El correo ya existe");

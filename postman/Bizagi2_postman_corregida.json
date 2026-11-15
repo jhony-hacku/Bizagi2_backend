@@ -2214,5 +2214,25 @@
     }
    ]
   }
+ ],
+ "event": [
+  {
+   "listen": "prerequest",
+   "script": {
+    "type": "text/javascript",
+    "exec": [
+     "if (pm.request.method === 'POST' && pm.request.url.toString().includes('/api/auth/')) {",
+     "  const base = pm.variables.get('baseUrl');",
+     "  pm.sendRequest(base + '/api/auth/csrf', (error, response) => {",
+     "    if (error) throw error;",
+     "    const raw = response.headers.all().find(h => h.key.toLowerCase() === 'set-cookie' && h.value.startsWith('XSRF-TOKEN='));",
+     "    const token = raw ? raw.value.split(';')[0].slice('XSRF-TOKEN='.length) : pm.cookies.get('XSRF-TOKEN');",
+     "    if (!token) throw new Error('No se pudo obtener CSRF');",
+     "    pm.request.headers.upsert({ key: 'X-XSRF-TOKEN', value: token });",
+     "  });",
+     "}"
+    ]
+   }
+  }
  ]
 }
