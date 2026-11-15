@@ -49,7 +49,7 @@ public class RefreshTokenService {
         Claims claims;
         try {
             claims = jwtService.leerRefreshClaims(refreshToken);
-        } catch (JwtException | IllegalArgumentException ex) {
+        } catch (JwtException | IllegalArgumentException _) {
             throw new SesionInvalidaException("Sesion invalida o vencida: inicia sesion de nuevo");
         }
 
@@ -91,7 +91,7 @@ public class RefreshTokenService {
         Claims claims;
         try {
             claims = jwtService.leerRefreshClaims(token);
-        } catch (JwtException | IllegalArgumentException ex) {
+        } catch (JwtException | IllegalArgumentException _) {
             return;
         }
         Usuario usuario = usuarioRepository.buscarParaActualizar(Integer.valueOf(claims.getSubject())).orElse(null);

@@ -6,9 +6,11 @@ import static desarrollo.web.Bizagi2.service.Validaciones.requerido;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +37,11 @@ public class UsuarioService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final ModelMapper modelMapper;
 
-    private static final String HASH_FICTICIO = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
-            .encode("comparacion-para-usuario-inexistente");
+    private static final String USUARIO_NO_ENCONTRADO = "Usuario no encontrado";
+
+    // Hash de un valor aleatorio que nadie conoce: si el email no existe se compara contra el,
+    // para que el login tarde lo mismo exista o no la cuenta (no revela que emails estan registrados)
+    private static final String HASH_FICTICIO = new BCryptPasswordEncoder().encode(UUID.randomUUID().toString());
 
     // Incluye a los desactivados, para que el administrador pueda volver a activarlos
     public List<Usuario> listar(Integer empresaId) {
@@ -45,9 +50,9 @@ public class UsuarioService {
 
     public Usuario buscarPorId(Integer id, Integer empresaId) {
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(USUARIO_NO_ENCONTRADO));
         if (!usuario.getEmpresa().getId().equals(empresaId)) {
-            throw new RecursoNoEncontradoException("Usuario no encontrado");
+            throw new RecursoNoEncontradoException(USUARIO_NO_ENCONTRADO);
         }
         return usuario;
     }
@@ -141,16 +146,16 @@ public class UsuarioService {
     // HU-03: cerrar sesion. Al subir el contador, los tokens emitidos antes dejan de ser validos.
     public void cerrarSesion(Integer usuarioId) {
         Usuario usuario = usuarioRepository.buscarParaActualizar(usuarioId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(USUARIO_NO_ENCONTRADO));
         usuario.setVersionSesion(usuario.getVersionSesion() + 1);
         usuarioRepository.save(usuario);
     }
 
     private Usuario bloquearEnEmpresa(Integer id, Integer empresaId) {
         Usuario usuario = usuarioRepository.buscarParaActualizar(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(USUARIO_NO_ENCONTRADO));
         if (!usuario.getEmpresa().getId().equals(empresaId)) {
-            throw new RecursoNoEncontradoException("Usuario no encontrado");
+            throw new RecursoNoEncontradoException(USUARIO_NO_ENCONTRADO);
         }
         return usuario;
     }

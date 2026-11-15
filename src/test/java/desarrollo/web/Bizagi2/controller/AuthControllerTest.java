@@ -113,7 +113,7 @@ class AuthControllerTest {
         when(authService.login(datos)).thenReturn(new Sesion(cuerpo, REFRESH));
         refreshVigente();
 
-        ResponseEntity<?> respuesta = controller.login(datos, request);
+        ResponseEntity<Object> respuesta = controller.login(datos, request);
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(respuesta.getBody()).isSameAs(cuerpo);
@@ -127,7 +127,7 @@ class AuthControllerTest {
         when(request.getRemoteAddr()).thenReturn("10.0.0.1");
         when(loginIntentos.permitir("10.0.0.1", "ana@acme.com")).thenReturn(false);
 
-        ResponseEntity<?> respuesta = controller.login(datos, request);
+        ResponseEntity<Object> respuesta = controller.login(datos, request);
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(respuesta.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("300");
@@ -143,7 +143,7 @@ class AuthControllerTest {
         when(authService.refrescar("refresh.anterior")).thenReturn(new Sesion(cuerpo, REFRESH));
         refreshVigente();
 
-        ResponseEntity<?> respuesta = controller.refresh("refresh.anterior");
+        ResponseEntity<Object> respuesta = controller.refresh("refresh.anterior");
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(respuesta.getBody()).isSameAs(cuerpo);
@@ -155,7 +155,7 @@ class AuthControllerTest {
     void refreshInvalido() {
         when(authService.refrescar("refresh.usado")).thenThrow(new SesionInvalidaException("Sesion invalida"));
 
-        ResponseEntity<?> respuesta = controller.refresh("refresh.usado");
+        ResponseEntity<Object> respuesta = controller.refresh("refresh.usado");
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(respuesta.getBody()).isInstanceOf(ErrorResponse.class);

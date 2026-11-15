@@ -64,7 +64,8 @@ public class AuthController {
                             }"""))))
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> registrar(@Valid @RequestBody RegistroRequest datos) {
-        return conSesion(HttpStatus.CREATED, authService.registrar(datos));
+        Sesion sesion = authService.registrar(datos);
+        return conSesion(HttpStatus.CREATED, sesion).body(sesion.cuerpo());
     }
 
     @Operation(
@@ -76,21 +77,23 @@ public class AuthController {
                               "password": "Clave12345"
                             }"""))))
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest datos, HttpServletRequest request) {
+    public ResponseEntity<Object> login(@Valid @RequestBody LoginRequest datos, HttpServletRequest request) {
         if (!loginIntentos.permitir(request.getRemoteAddr(), datos.getEmail())) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, "300")
                     .body(error(HttpStatus.TOO_MANY_REQUESTS, "Demasiados intentos. Intenta de nuevo mas tarde"));
         }
-        return conSesion(HttpStatus.OK, authService.login(datos));
+        Sesion sesion = authService.login(datos);
+        return conSesion(HttpStatus.OK, sesion).body(sesion.cuerpo());
     }
 
     @Operation(summary = "Renovar la sesion: usa la cookie del refresh token y entrega un access token nuevo y un refresh nuevo (rotacion)")
     @PostMapping("/refresh")
-    public ResponseEntity<?> refresh(
+    public ResponseEntity<Object> refresh(
             @CookieValue(name = RefreshCookie.NOMBRE, required = false) String refreshToken) {
         try {
-            return conSesion(HttpStatus.OK, authService.refrescar(refreshToken));
+            Sesion sesion = authService.refrescar(refreshToken);
+            return conSesion(HttpStatus.OK, sesion).body(sesion.cuerpo());
         } catch (SesionInvalidaException ex) {
             // Sesion perdida: se borra la cookie para que el navegador no siga enviando un token muerto
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -109,16 +112,15 @@ public class AuthController {
                 .build();
     }
 
-    // El refresh token nunca va en el cuerpo: solo en la cookie HttpOnly
-    private ResponseEntity<AuthResponse> conSesion(HttpStatus status, Sesion sesion) {
+    // Cabeceras comunes de una sesion nueva. El refresh token nunca va en el cuerpo: solo en la cookie HttpOnly
+    private ResponseEntity.BodyBuilder conSesion(HttpStatus status, Sesion sesion) {
         return ResponseEntity.status(status)
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.crear(sesion.refreshToken(),
                         jwtService.leerRefreshClaims(sesion.refreshToken()).getExpiration().toInstant()).toString())
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(sesion.cuerpo());
+                .header(HttpHeaders.CACHE_CONTROL, "no-store");
     }
 
-    // Mismo formato de error que GlobalExceptionHandler: { status, message, timestamp }
+    // Mismo cuerpo de error que usa GlobalExceptionHandler en el resto de la API
     private ErrorResponse error(HttpStatus status, String mensaje) {
         return new ErrorResponse(status.value(), mensaje, Instant.now().toString(), null);
     }
