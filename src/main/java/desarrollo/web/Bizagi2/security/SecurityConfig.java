@@ -29,7 +29,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        CookieCsrfTokenRepository csrfCookies = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        // Patron "double submit": Angular debe poder leer la cookie XSRF-TOKEN para reenviarla en la cabecera
+        // X-XSRF-TOKEN, por eso no puede ser HttpOnly. No contiene credenciales (el refresh token si es HttpOnly).
+        CookieCsrfTokenRepository csrfCookies = CookieCsrfTokenRepository.withHttpOnlyFalse(); // NOSONAR ver comentario
         csrfCookies.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Strict").secure(secureCookie));
         var csrfHeader = new CsrfTokenRequestAttributeHandler() {
             @Override
@@ -38,12 +40,13 @@ public class SecurityConfig {
             }
         };
         http
-                // Solo /auth usa cookies para autenticar. El resto de la API exige Bearer.
+                // Solo /auth usa cookies para autenticar, y ahi el CSRF sigue activo. El resto de la API exige
+                // la cabecera Authorization: Bearer, que el navegador nunca envia por su cuenta: no es vulnerable a CSRF.
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
                         .csrfTokenRequestHandler(csrfHeader)
                         // Cada Bearer autentica una peticion, no abre una nueva sesion de navegador.
                         .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
-                        .requireCsrfProtectionMatcher(request -> request.getRequestURI().startsWith("/api/auth/")
+                        .requireCsrfProtectionMatcher(request -> request.getRequestURI().startsWith("/api/auth/") // NOSONAR ver comentario
                                 && !java.util.Set.of("GET", "HEAD", "OPTIONS").contains(request.getMethod())))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
