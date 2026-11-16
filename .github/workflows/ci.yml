@@ -369,6 +369,5 @@ jobs:
           path: |
             e2e/target/screenshots/
             e2e/target/surefire-reports/
-          if-no-files-found: ignore.\mvnw.cmd -f e2e\pom.xml test "-De2e.baseUrl=https://bizagi2-staging.taila4ff03.ts.net"
-
+          if-no-files-found: ignore
           retention-days: 7
