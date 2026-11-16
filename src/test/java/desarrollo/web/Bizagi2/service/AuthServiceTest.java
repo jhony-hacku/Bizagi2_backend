@@ -21,6 +21,7 @@ import desarrollo.web.Bizagi2.entities.Empresa;
 import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.ReglaNegocioException;
+import desarrollo.web.Bizagi2.exception.SesionInvalidaException;
 import desarrollo.web.Bizagi2.security.JwtService;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +36,9 @@ class AuthServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
 
     @InjectMocks
     private AuthService authService;
@@ -55,7 +59,8 @@ class AuthServiceTest {
 
         when(empresaService.crear("Tech SA", "900111222", "info@tech.com")).thenReturn(empresa);
         when(usuarioService.crear(eq(1), any(Usuario.class))).thenReturn(admin);
-        when(jwtService.generarToken(admin)).thenReturn("token.jwt.valido");
+        when(jwtService.generarAccessToken(admin)).thenReturn("token.jwt.valido");
+        when(refreshTokenService.iniciarFamilia(admin)).thenReturn("refresh.registro");
 
         RegistroRequest datos = new RegistroRequest();
         datos.setNombreEmpresa("Tech SA");
@@ -65,8 +70,10 @@ class AuthServiceTest {
         datos.setEmail("admin@tech.com");
         datos.setPassword("Secure12345");
 
-        AuthResponse respuesta = authService.registrar(datos);
+        AuthService.Sesion sesion = authService.registrar(datos);
+        AuthResponse respuesta = sesion.cuerpo();
 
+        assertThat(sesion.refreshToken()).isEqualTo("refresh.registro");
         assertThat(respuesta).isNotNull();
         assertThat(respuesta.getToken()).isEqualTo("token.jwt.valido");
         assertThat(respuesta.getUsuarioId()).isEqualTo(10);
@@ -101,10 +108,16 @@ class AuthServiceTest {
         usuario.setEmpresa(empresa);
 
         when(usuarioService.autenticar("carlos@tech.com", "Password123")).thenReturn(usuario);
-        when(jwtService.generarToken(usuario)).thenReturn("token.login.ok");
+        when(jwtService.generarAccessToken(usuario)).thenReturn("token.login.ok");
+        when(jwtService.getAccessExpirationMs()).thenReturn(900_000L);
+        when(refreshTokenService.iniciarFamilia(usuario)).thenReturn("refresh.login.ok");
 
-        AuthResponse respuesta = authService.login(new LoginRequest("carlos@tech.com", "Password123"));
+        AuthService.Sesion sesion = authService.login(new LoginRequest("carlos@tech.com", "Password123"));
+        AuthResponse respuesta = sesion.cuerpo();
 
+        assertThat(sesion.refreshToken()).isEqualTo("refresh.login.ok");
+        assertThat(respuesta.getTokenType()).isEqualTo("Bearer");
+        assertThat(respuesta.getExpiresIn()).isEqualTo(900L);
         assertThat(respuesta.getToken()).isEqualTo("token.login.ok");
         assertThat(respuesta.getEmpresaId()).isEqualTo(1);
         assertThat(respuesta.getEmpresa()).isEqualTo("Tech SA");
@@ -117,8 +130,38 @@ class AuthServiceTest {
         Usuario usuario = new Usuario();
         usuario.setId(10);
 
-        authService.logout(usuario);
+        authService.logout(usuario, null);
 
         verify(usuarioService).cerrarSesion(10);
+        verify(refreshTokenService).cerrarSesiones(10);
+    }
+
+    @Test
+    @DisplayName("Refrescar: entrega access nuevo y el refresh rotado, sin poner el refresh en el cuerpo")
+    void refrescar_rotaYEntregaTokensNuevos() {
+        Empresa empresa = new Empresa();
+        empresa.setId(1);
+        empresa.setNombre("Tech SA");
+        Usuario usuario = new Usuario();
+        usuario.setId(10);
+        usuario.setEmpresa(empresa);
+        usuario.setRolAcceso(RolAcceso.EDITOR);
+
+        when(refreshTokenService.rotar("refresh.viejo"))
+                .thenReturn(new RefreshTokenService.Rotacion(usuario, "refresh.nuevo"));
+        when(jwtService.generarAccessToken(usuario)).thenReturn("access.nuevo");
+
+        AuthService.Sesion sesion = authService.refrescar("refresh.viejo");
+
+        assertThat(sesion.refreshToken()).isEqualTo("refresh.nuevo");
+        assertThat(sesion.cuerpo().getToken()).isEqualTo("access.nuevo");
+    }
+
+    @Test
+    @DisplayName("Refrescar con un refresh token invalido propaga SesionInvalidaException")
+    void refrescar_tokenInvalido_propagaExcepcion() {
+        when(refreshTokenService.rotar("malo")).thenThrow(new SesionInvalidaException("Sesion invalida"));
+
+        assertThatThrownBy(() -> authService.refrescar("malo")).isInstanceOf(SesionInvalidaException.class);
     }
 }

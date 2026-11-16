@@ -48,6 +48,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
     }
 
+    @ExceptionHandler(SesionInvalidaException.class)
+    public ResponseEntity<ErrorResponse> sesionInvalida(SesionInvalidaException ex) {
+        return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> sinPermiso(AccessDeniedException ex) {
         return error(HttpStatus.FORBIDDEN, ex.getMessage() != null ? ex.getMessage() : "No tienes permisos para realizar esta accion");

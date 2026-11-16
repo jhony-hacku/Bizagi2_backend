@@ -1,0 +1,75 @@
+# Stack completo de Bizagi2 para un servidor (staging o produccion).
+# Usa imagenes ya construidas; los valores salen del archivo .env de esta carpeta.
+#
+#   docker compose pull && docker compose up -d
+#
+# Para probarlo en tu PC construyendo las imagenes desde el codigo:
+#
+#   docker compose -f compose.yml -f compose.build.yml up --build -d
+
+name: bizagi2
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bizagi2}
+      POSTGRES_USER: ${POSTGRES_USER:-bizagi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+    # Sin "ports": la base de datos solo es visible dentro de la red de Docker
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/jhony-hacku/bizagi2-backend:${BACKEND_TAG:-latest}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-bizagi2}
+      DB_USER: ${POSTGRES_USER:-bizagi}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DDL_AUTO: ${DDL_AUTO:-update}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env}
+      # Access token corto (15 min) y refresh token largo (7 dias) en cookie HttpOnly
+      JWT_ACCESS_EXPIRATION_MS: ${JWT_ACCESS_EXPIRATION_MS:-900000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
+      # true: las cookies de sesion solo viajan por HTTPS. Ponlo en false unicamente si se entra por HTTP
+      JWT_REFRESH_COOKIE_SECURE: ${JWT_REFRESH_COOKIE_SECURE:-true}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      # La JVM usa como maximo el 70% de la memoria del contenedor para el heap
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # Sin "ports": solo el front (nginx) habla con el backend
+    healthcheck:
+      # Sano cuando el puerto 8080 acepta conexiones (la imagen no trae curl garantizado)
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 120s
+    mem_limit: 768m
+    restart: unless-stopped
+
+  front:
+    image: ghcr.io/jhony-hacku/bizagi2-front:${FRONT_TAG:-latest}
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      # Por defecto solo escucha en la propia maquina; el tunel publico se conecta ahi
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:8080"
+    mem_limit: 64m
+    restart: unless-stopped
+
+volumes:
+  db_data:

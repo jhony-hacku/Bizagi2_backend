@@ -66,7 +66,7 @@ class JwtAuthenticationFilterTest {
         Claims claims = mock(Claims.class);
         when(claims.getSubject()).thenReturn("5");
         when(claims.get("v", Integer.class)).thenReturn(1);
-        when(jwtService.leerClaims("token-valido")).thenReturn(claims);
+        when(jwtService.leerAccessClaims("token-valido")).thenReturn(claims);
 
         Usuario usuario = new Usuario();
         usuario.setId(5);
@@ -89,7 +89,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
-        when(jwtService.leerClaims(anyString())).thenThrow(new JwtException("Invalido"));
+        when(jwtService.leerAccessClaims(anyString())).thenThrow(new JwtException("Invalido"));
 
         filter.doFilter(request, response, chain);
 
