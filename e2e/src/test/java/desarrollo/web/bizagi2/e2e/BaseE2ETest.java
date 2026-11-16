@@ -31,9 +31,9 @@ abstract class BaseE2ETest {
     protected WebDriver driver;
     protected WebDriverWait espera;
 
-    // Si la prueba falla, guarda una captura de pantalla en target/screenshots antes de cerrar el navegador
+    // Guarda la pantalla final de cada prueba (pase o falle) y arma el reporte en target/evidencias
     @RegisterExtension
-    final CapturaAlFallar capturaAlFallar = new CapturaAlFallar(() -> driver);
+    final Evidencias evidencias = new Evidencias(() -> driver);
 
     // Datos de una empresa recien registrada, para iniciar sesion despues
     protected record Cuenta(String empresa, String email, String password) {

@@ -21,6 +21,15 @@ Requiere Chrome instalado y JDK 21 o superior. Desde la raiz del repositorio:
 ```
 
 Cada prueba registra una empresa nueva con datos unicos, asi que se pueden repetir sin limpiar la base de datos.
-Si una prueba falla, queda una captura de pantalla en `e2e/target/screenshots/`.
+## Evidencias
+
+Cada corrida deja en `e2e/target/evidencias/`:
+
+- `index.html`: reporte para abrir en el navegador, con las pruebas agrupadas por historia de usuario,
+  su resultado, su duracion y la captura de la pantalla final de cada una.
+- `capturas/`: una imagen por prueba, pase o falle.
+- `resumen.md`: la misma informacion como tabla, que el pipeline muestra en el resumen de la ejecucion.
+
+En el pipeline, la carpeta completa se descarga como el artefacto `e2e-evidencias`.
 
 La sesion usa cookies seguras: contra un servidor por HTTP hay que tener `JWT_REFRESH_COOKIE_SECURE=false`.
