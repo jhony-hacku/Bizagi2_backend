@@ -7,11 +7,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 // Base de las pruebas E2E: abre un Chrome nuevo para cada prueba y ofrece los pasos comunes.
@@ -35,6 +37,10 @@ abstract class BaseE2ETest {
 
     // Datos de una empresa recien registrada, para iniciar sesion despues
     protected record Cuenta(String empresa, String email, String password) {
+    }
+
+    // Datos de un usuario invitado a la empresa (HU-02)
+    protected record Invitado(String nombre, String email, String password) {
     }
 
     @BeforeEach
@@ -78,6 +84,29 @@ abstract class BaseE2ETest {
     // Espera a que el elemento tenga exactamente ese texto (util cuando primero muestra "Cargando...")
     protected void esperarTexto(By localizador, String texto) {
         espera.until(ExpectedConditions.textToBe(localizador, texto));
+    }
+
+    // Borra el contenido de un campo tecleando, para que Angular se entere del cambio
+    protected void vaciar(By localizador) {
+        visible(localizador).sendKeys(Keys.chord(Keys.CONTROL, "a"), Keys.DELETE);
+    }
+
+    protected void seleccionar(By localizador, String valor) {
+        new Select(visible(localizador)).selectByValue(valor);
+    }
+
+    // Espera a que un campo ya tenga cargado ese valor (los formularios de edicion se llenan tras consultar al backend)
+    protected void esperarValor(By localizador, String valor) {
+        espera.until(ExpectedConditions.textToBePresentInElementValue(localizador, valor));
+    }
+
+    protected void esperarQueDesaparezca(By localizador) {
+        espera.until(ExpectedConditions.invisibilityOfElementLocated(localizador));
+    }
+
+    // Consulta inmediata, sin esperar: sirve para comprobar que algo NO esta en la pantalla ya cargada
+    protected boolean existe(By localizador) {
+        return !driver.findElements(localizador).isEmpty();
     }
 
     protected boolean estaEn(String ruta) {
@@ -127,6 +156,107 @@ abstract class BaseE2ETest {
         clic(By.cssSelector("button.boton-perfil"));
         clic(By.cssSelector("button.salir"));
         esperarPantallaLogin();
+    }
+
+    // ---------- Procesos (HU-04 a HU-07) ----------
+
+    protected static By filaProceso(String nombre) {
+        return By.xpath(xpathFilaProceso(nombre));
+    }
+
+    // Un elemento dentro de la fila de un proceso, por ejemplo el enlace "Editar" o la etiqueta de estado
+    protected static By enFilaProceso(String nombre, String xpathRelativo) {
+        return By.xpath(xpathFilaProceso(nombre) + xpathRelativo);
+    }
+
+    protected static By estadoProceso(String nombre) {
+        return enFilaProceso(nombre, "//span[contains(@class,'badge')]");
+    }
+
+    protected static By accionProceso(String nombre, String texto) {
+        return enFilaProceso(nombre, "//*[self::a or self::button][normalize-space()='" + texto + "']");
+    }
+
+    // HU-04: crea un proceso desde la lista y espera a verlo en ella
+    protected void crearProceso(String nombre, String categoria) {
+        clic(By.linkText("Nuevo proceso"));
+        escribir(By.id("nombre"), nombre);
+        escribir(By.id("descripcion"), "Proceso creado por una prueba E2E");
+        escribir(By.id("categoria"), categoria);
+        clic(BOTON_ENVIAR);
+
+        esperarPantallaProcesos();
+        visible(filaProceso(nombre));
+    }
+
+    // HU-07: abre el historial del proceso y espera a que cargue
+    protected void abrirHistorial(String nombre) {
+        clic(accionProceso(nombre, "Historial"));
+        espera.until(ExpectedConditions.textToBe(By.cssSelector("main h1"), "Historial \u00b7 " + nombre));
+    }
+
+    // Una entrada del historial con esa accion (CREAR, EDITAR, ELIMINAR...)
+    protected static By entradaHistorial(String accion) {
+        return By.xpath("//article[.//span[contains(@class,'accion') and normalize-space()='" + accion + "']]");
+    }
+
+    protected void volverAProcesos() {
+        clic(By.linkText("Procesos"));
+        esperarPantallaProcesos();
+    }
+
+    // ---------- Dialogo de confirmacion ----------
+
+    protected static final By DIALOGO = By.cssSelector("[role='alertdialog']");
+
+    protected void confirmarDialogo() {
+        clic(By.cssSelector("[role='alertdialog'] button.confirmar"));
+        esperarQueDesaparezca(DIALOGO);
+    }
+
+    protected void cancelarDialogo() {
+        clic(By.cssSelector("[role='alertdialog'] button.cancelar"));
+        esperarQueDesaparezca(DIALOGO);
+    }
+
+    // ---------- Usuarios de la empresa (HU-02) ----------
+
+    protected static By filaUsuario(String email) {
+        return By.xpath(xpathFilaUsuario(email));
+    }
+
+    protected static By enFilaUsuario(String email, String xpathRelativo) {
+        return By.xpath(xpathFilaUsuario(email) + xpathRelativo);
+    }
+
+    protected void abrirUsuarios() {
+        clic(By.linkText("Usuarios"));
+        espera.until(ExpectedConditions.textToBe(By.cssSelector("main h1"), "Usuarios"));
+    }
+
+    // HU-02: el administrador invita a un usuario con un rol de acceso (ADMINISTRADOR, EDITOR o LECTOR)
+    protected Invitado invitarUsuario(String rolAcceso) {
+        String id = identificadorUnico();
+        Invitado invitado = new Invitado("Usuario E2E " + id, "usuario." + id + "@example.com", PASSWORD);
+
+        abrirUsuarios();
+        clic(By.xpath("//button[normalize-space()='Invitar usuario']"));
+        escribir(By.id("nombre"), invitado.nombre());
+        escribir(By.id("email"), invitado.email());
+        seleccionar(By.id("rolAcceso"), rolAcceso);
+        escribir(By.id("password"), invitado.password());
+        clic(BOTON_ENVIAR);
+
+        visible(filaUsuario(invitado.email()));
+        return invitado;
+    }
+
+    private static String xpathFilaProceso(String nombre) {
+        return "//tr[td/strong[normalize-space()='" + nombre + "']]";
+    }
+
+    private static String xpathFilaUsuario(String email) {
+        return "//tr[td/span[contains(@class,'sub') and normalize-space()='" + email + "']]";
     }
 
     protected static String identificadorUnico() {
