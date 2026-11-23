@@ -2,7 +2,7 @@
 
 Sistema de gestion de procesos multiempresa (visor y editor de procesos). Spring Boot 4.1.1, Java 25, JPA/Hibernate, PostgreSQL y autenticacion con JWT.
 
-Cada empresa se registra con su administrador, crea colaboradores con distintos roles y modela sus procesos como un diagrama (pools, lanes, actividades, gateways, arcos, mensajes y correlaciones). La informacion de una empresa nunca es visible para otra.
+Cada empresa se registra con su creador, crea colaboradores con distintos roles y modela sus procesos como un diagrama (pools, lanes, actividades, gateways, arcos, mensajes y correlaciones). La informacion de una empresa nunca es visible para otra.
 
 ## Estructura
 
@@ -91,7 +91,8 @@ docker compose up --build -d
 
 | Rol | Puede |
 |---|---|
-| ADMINISTRADOR | Todo, incluida la gestion de usuarios y los datos de la empresa |
+| CREADOR | Cuenta que registra la empresa. Puede administrar la empresa y sus usuarios. Su rol y su estado estan protegidos, y solo el puede editar su perfil. |
+| ADMINISTRADOR | Gestionar usuarios, datos de la empresa y procesos. Las acciones sobre la cuenta del creador estan restringidas. |
 | EDITOR | Consultar y modificar procesos y todo su diagrama |
 | LECTOR | Solo consultar |
 
@@ -103,10 +104,10 @@ Todos requieren el header `Authorization: Bearer <access token>`, salvo `/api/au
 |---|---|
 | Autenticacion | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout` |
 | Empresa | `GET /api/empresa`, `PUT /api/empresa` |
-| Usuarios (solo ADMINISTRADOR, salvo `/me`) | `GET /api/usuarios/me`, `GET/POST /api/usuarios`, `GET/PUT/DELETE /api/usuarios/{id}` (DELETE desactiva), `PUT /api/usuarios/{id}/activar` |
+| Usuarios (CREADOR y ADMINISTRADOR, salvo `/me`) | `GET /api/usuarios/me`, `GET/POST /api/usuarios`, `GET/PUT/DELETE /api/usuarios/{id}` (DELETE desactiva), `PUT /api/usuarios/{id}/activar` |
 | Procesos | `GET /api/procesos?nombre=&estado=&categoria=&activo=&page=&size=`, `POST /api/procesos`, `GET/PUT/DELETE /api/procesos/{id}`, `GET /api/procesos/{id}/diagrama`, `GET /api/procesos/{id}/historial`, `GET /api/procesos/{id}/validacion` |
-| Compartir procesos (HU-23) | `GET/POST /api/procesos/{id}/compartir` (POST solo ADMINISTRADOR, body `{"nit": "..."}`), `DELETE /api/procesos/{id}/compartir/{empresaId}`, `GET /api/procesos/compartidos` |
-| Roles de proceso (de la empresa) | `GET /api/roles-proceso?nombre=&page=&size=`, `POST /api/roles-proceso` (solo ADMINISTRADOR), `GET/PUT/DELETE /api/roles-proceso/{id}`, `GET /api/roles-proceso/{id}/historial` |
+| Compartir procesos (HU-23) | `GET/POST /api/procesos/{id}/compartir` (POST para CREADOR y ADMINISTRADOR, body `{"nit": "..."}`), `DELETE /api/procesos/{id}/compartir/{empresaId}`, `GET /api/procesos/compartidos` |
+| Roles de proceso (de la empresa) | `GET /api/roles-proceso?nombre=&page=&size=`, `POST /api/roles-proceso` (CREADOR y ADMINISTRADOR), `GET/PUT/DELETE /api/roles-proceso/{id}`, `GET /api/roles-proceso/{id}/historial` |
 | Pools | `GET/POST /api/procesos/{procesoId}/pools`, `GET/PUT/DELETE /api/pools/{id}` |
 | Lanes | `GET/POST /api/pools/{poolId}/lanes`, `PUT /api/pools/{poolId}/lanes/orden` (body: lista de ids), `GET /api/pools/{poolId}/roles-disponibles`, `GET/PUT/DELETE /api/lanes/{id}` |
 | Actividades | `GET /api/pools/{poolId}/actividades`, `POST /api/lanes/{laneId}/actividades`, `GET/PUT/DELETE /api/actividades/{id}` |
@@ -130,12 +131,12 @@ POST /api/auth/login
 { "email": "ana@acme.com", "password": "Clave12345" }
 ```
 
-Ambos responden con el access token (`token`, `tokenType`, `expiresIn` en segundos) y los datos del usuario, y dejan el refresh token en la cookie `refresh_token` (HttpOnly, nunca en el JSON). El registro crea la empresa y su administrador inicial (todos los campos son obligatorios y el NIT es unico); los demas usuarios los crea el administrador con `POST /api/usuarios` indicando su correo, su contrasena inicial y su rol.
+Ambos responden con el access token (`token`, `tokenType`, `expiresIn` en segundos) y los datos del usuario, y dejan el refresh token en la cookie `refresh_token` (HttpOnly, nunca en el JSON). El registro crea la empresa y su creador (todos los campos son obligatorios y el NIT es unico). Con `POST /api/usuarios` se pueden asignar `ADMINISTRADOR`, `EDITOR` y `LECTOR`.
 
 ```json
 { "token": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 900,
   "usuarioId": 1, "nombre": "Ana Perez", "email": "ana@acme.com",
-  "rolAcceso": "ADMINISTRADOR", "empresaId": 1, "empresa": "Acme SAS" }
+  "rolAcceso": "CREADOR", "empresaId": 1, "empresa": "Acme SAS" }
 ```
 
 `POST /api/auth/refresh` (sin cuerpo, con la cookie) responde igual que el login: access token nuevo y refresh token nuevo en la cookie. Si la cookie falta, vencio o ya fue usada responde `401` y borra la cookie: hay que volver a hacer login.
@@ -221,17 +222,17 @@ logout ──► se revocan todos los refresh del usuario y se borra la cookie
 
 - Multitenancy: todo se consulta por la empresa del token; un recurso de otra empresa responde `404`.
 - Borrado logico en todo el diagrama (procesos, pools, lanes, actividades, gateways, eventos, arcos, mensajes, roles): el registro pasa a `activo = false` y deja de verse en las consultas normales.
-- Eliminar (salvo pools y lanes): solo ADMINISTRADOR. Pools y lanes: los elimina quien tenga permiso de estructura (HU-24).
+- Eliminar (salvo pools y lanes): CREADOR y ADMINISTRADOR. Pools y lanes: los elimina quien tenga permiso de estructura (HU-24).
 - Historial general: cada cambio queda con usuario, fecha, accion, entidad y detalle. `GET /api/procesos/{id}/historial` trae los del proceso y su diagrama; `GET /api/roles-proceso/{id}/historial` los del rol.
-- Roles de proceso: son de la empresa (no de un proceso), nombre unico por empresa, solo el ADMINISTRADOR los crea. No se elimina uno que alguna lane use (el `409` dice en que procesos).
+- Roles de proceso: son de la empresa (no de un proceso), con nombre unico por empresa. Los crean CREADOR y ADMINISTRADOR. No se elimina uno que alguna lane use (el `409` dice en que procesos).
 - Lane: pertenece a un pool y tiene un rol de proceso. La actividad no tiene rol propio: su responsable es el de su lane. No se elimina una lane con actividades.
-- Permiso de estructura (HU-24): `PUT /api/empresa` con `editorModificaEstructura` decide si el EDITOR puede crear, editar y eliminar pools y lanes. El ADMINISTRADOR siempre puede y el LECTOR nunca.
+- Permiso de estructura (HU-24): `PUT /api/empresa` con `editorModificaEstructura` decide si el EDITOR puede crear, editar y eliminar pools y lanes. CREADOR y ADMINISTRADOR siempre tienen ese permiso.
 - Pool de participante externo (CLIENTE, PROVEEDOR, SISTEMA_EXTERNO): caja negra, no admite lanes ni elementos. Un pool solo se elimina si esta vacio y sin mensajes dirigidos a el.
 - Actividad: requiere `nombre` y `tipo`; el nombre es unico dentro del proceso.
 - Arcos: unen elementos del mismo pool (entre pools se usa un mensaje), sin duplicados ni bucles. La `condicion` solo existe si el arco sale de un gateway exclusivo o inclusivo; al pasar un gateway a PARALELA se borran las condiciones de sus arcos salientes. Un Message Catch de inicio no admite arcos entrantes.
 - Mensajes: salen de un evento `MENSAJE_LANZAMIENTO` o una actividad `ENVIO` hacia otro pool. Si el destino es un `SISTEMA_EXTERNO` requieren `tipoDestino`. La clave de correlacion (`criterio` y `accionSinCaso`) se define por mensaje.
 - Validacion (`GET /api/procesos/{id}/validacion`): devuelve `ERROR` y `ADVERTENCIA`. Los errores (gateway sin dos salientes, arco de gateway sin condicion, Catch de inicio con arcos entrantes) impiden pasar el proceso a `PUBLICADO`; en `BORRADOR` se puede trabajar incompleto. Las advertencias (elementos desconectados, mensaje sin receptor, clave de correlacion ausente o distinta, mensajes ambiguos) solo avisan.
-- Compartir (HU-23): solo el ADMINISTRADOR, por NIT de la empresa invitada, en solo lectura. La invitada ve el proceso y su diagrama sin los roles de la propietaria y no ve el historial.
+- Compartir (HU-23): CREADOR y ADMINISTRADOR comparten por NIT de la empresa invitada, en solo lectura. La invitada ve el proceso y su diagrama sin los roles de la propietaria y no ve el historial.
 - Un proceso eliminado se puede consultar pero no admite cambios (`409`).
 
 ## Formato de errores
@@ -252,6 +253,12 @@ Si un DTO no pasa la validacion (`@Valid`), el `400` incluye el mensaje de cada 
 ## Probar los endpoints con Postman
 
 `postman/Bizagi2_endpoints_DTO.postman_collection.json` recorre los 71 endpoints de la API en el orden de las historias de usuario (130 peticiones, incluidos los casos de error y de validacion). Importarla en Postman, levantar la API y ejecutar **Run collection** en orden: cada peticion guarda los ids que necesitan las siguientes. Genera NIT y correos unicos en cada ejecucion, asi que se puede repetir sin reiniciar la base. Para probar un endpoint suelto, basta con ejecutar antes las peticiones que crean lo que necesita (por ejemplo 01.1 y 04.1 antes de los pools).
+
+## Migracion del rol CREADOR en PostgreSQL
+
+Antes de desplegar sobre una base existente, detén el backend y ejecuta `scripts/migrar_rol_creador.sql` con `psql` sobre esa base. El registro original insertaba al creador antes de permitir colaboradores y la aplicación solo desactiva usuarios. Por eso el script recupera al primero por ID de cada empresa. Si hay datos importados, IDs reasignados o usuarios borrados manualmente, verifica quién fundó cada empresa antes de usar ese criterio. Revisa también las credenciales de las cuentas que otro administrador haya podido modificar.
+
+La migracion conserva el estado activo o inactivo de cada cuenta y revoca las sesiones de los usuarios migrados. La recuperacion de un creador inactivo requiere verificar su identidad y recuperar sus credenciales fuera del flujo de colaboradores. Ejecuta el mismo script tras inicializar el esquema de una base nueva de PostgreSQL para instalar el indice unico de creador por empresa.
 
 ## Si ya tenias la base de datos creada con una version anterior
 

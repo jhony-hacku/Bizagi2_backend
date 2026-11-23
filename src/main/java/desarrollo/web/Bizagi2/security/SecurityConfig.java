@@ -21,6 +21,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private static final String[] ROLES_ADMINISTRACION = {"CREADOR", "ADMINISTRADOR"};
+    private static final String[] ROLES_ESCRITURA = {"CREADOR", "ADMINISTRADOR", "EDITOR"};
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
@@ -63,20 +66,20 @@ public class SecurityConfig {
                         // Cualquier usuario autenticado puede ver su propio perfil
                         .requestMatchers(HttpMethod.GET, "/api/usuarios/me").authenticated()
                         // Solo el administrador gestiona colaboradores y los datos de la empresa
-                        .requestMatchers("/api/usuarios/**").hasRole("ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.PUT, "/api/empresa").hasRole("ADMINISTRADOR")
+                        .requestMatchers("/api/usuarios/**").hasAnyRole(ROLES_ADMINISTRACION)
+                        .requestMatchers(HttpMethod.PUT, "/api/empresa").hasAnyRole(ROLES_ADMINISTRACION)
                         // HU-17: solo el administrador crea roles de proceso. HU-23: solo el administrador comparte.
-                        .requestMatchers(HttpMethod.POST, "/api/roles-proceso").hasRole("ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.POST, "/api/procesos/*/compartir").hasRole("ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/roles-proceso").hasAnyRole(ROLES_ADMINISTRACION)
+                        .requestMatchers(HttpMethod.POST, "/api/procesos/*/compartir").hasAnyRole(ROLES_ADMINISTRACION)
                         // HU-24: pools y lanes los puede eliminar el editor si la empresa lo permite (lo valida el servicio)
                         .requestMatchers(HttpMethod.DELETE, "/api/pools/**", "/api/lanes/**")
-                        .hasAnyRole("ADMINISTRADOR", "EDITOR")
+                        .hasAnyRole(ROLES_ESCRITURA)
                         // Eliminar lo demas: solo el administrador (regla comun de las historias de usuario)
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyRole(ROLES_ADMINISTRACION)
                         // Lectura: administrador, editor y lector
                         .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
                         // Escritura: solo administrador y editor (el lector es de solo lectura)
-                        .requestMatchers("/api/**").hasAnyRole("ADMINISTRADOR", "EDITOR")
+                        .requestMatchers("/api/**").hasAnyRole(ROLES_ESCRITURA)
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

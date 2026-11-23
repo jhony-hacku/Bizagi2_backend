@@ -9,7 +9,6 @@ import desarrollo.web.Bizagi2.dto.auth.AuthResponse;
 import desarrollo.web.Bizagi2.dto.auth.LoginRequest;
 import desarrollo.web.Bizagi2.dto.auth.RegistroRequest;
 import desarrollo.web.Bizagi2.entities.Empresa;
-import desarrollo.web.Bizagi2.entities.RolAcceso;
 import desarrollo.web.Bizagi2.entities.Usuario;
 import desarrollo.web.Bizagi2.exception.SesionInvalidaException;
 import desarrollo.web.Bizagi2.security.JwtService;
@@ -30,7 +29,7 @@ public class AuthService {
     public record Sesion(AuthResponse cuerpo, String refreshToken) {
     }
 
-    // HU-01: registra una empresa nueva junto con su usuario administrador inicial.
+    // HU-01: registra una empresa nueva junto con su creador.
     // Primero se validan todos los campos obligatorios y luego se crea todo.
     // si algo falla
     // (NIT o email repetido...) no queda nada a medias.
@@ -45,13 +44,12 @@ public class AuthService {
         Empresa empresa = empresaService.crear(datos.getNombreEmpresa(), datos.getNit(),
                 datos.getEmailContacto());
 
-        Usuario admin = new Usuario();
-        admin.setNombre(datos.getNombre());
-        admin.setEmail(datos.getEmail());
-        admin.setPassword(datos.getPassword());
-        admin.setRolAcceso(RolAcceso.ADMINISTRADOR);
+        Usuario creador = new Usuario();
+        creador.setNombre(datos.getNombre());
+        creador.setEmail(datos.getEmail());
+        creador.setPassword(datos.getPassword());
 
-        return abrirSesion(usuarioService.crear(empresa.getId(), admin));
+        return abrirSesion(usuarioService.crearCreador(empresa.getId(), creador));
     }
 
     // Login: access token corto + refresh token largo (familia nueva).

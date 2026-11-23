@@ -128,7 +128,7 @@ class HU02_RegistroUsuarioTest {
         Usuario cambios = new Usuario();
         cambios.setRolAcceso(RolAcceso.EDITOR);
 
-        Usuario resultado = usuarioService.actualizar(20, 1, cambios);
+        Usuario resultado = usuarioService.actualizar(20, 1, 10, cambios);
 
         assertThat(resultado.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);
         verify(usuarioRepository).save(usuarioExistente);

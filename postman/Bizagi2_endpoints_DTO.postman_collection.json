@@ -39,7 +39,7 @@
       "name": "HU-01 Registro de empresa",
       "item": [
         {
-          "name": "01.1 Registrar empresa y administrador",
+          "name": "01.1 Registrar empresa y creador",
           "event": [
             {
               "listen": "test",
@@ -48,7 +48,7 @@
                 "exec": [
                   "pm.test('Status 201', () => pm.response.to.have.status(201));",
                   "pm.test(\"Devuelve token\", () => pm.expect(pm.response.json().token).to.be.a('string'));",
-                  "pm.test(\"Rol ADMINISTRADOR\", () => pm.expect(pm.response.json().rolAcceso).to.eql('ADMINISTRADOR'));",
+                  "pm.test(\"Rol CREADOR\", () => pm.expect(pm.response.json().rolAcceso).to.eql('CREADOR'));",
                   "pm.test(\"La respuesta no expone la contrasena\", () => pm.expect(pm.response.text()).to.not.include('password'));",
                   "const body = pm.response.json();",
                   "pm.collectionVariables.set('token', body.token);",

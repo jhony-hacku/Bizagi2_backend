@@ -37,7 +37,7 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.aResponse(usuario));
     }
 
-    // El resto de rutas son solo para el ADMINISTRADOR (ver SecurityConfig)
+    // El resto de rutas requiere permisos de administracion (ver SecurityConfig).
     @GetMapping
     public ResponseEntity<List<UsuarioResponse>> listar(@AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(usuarioService.listarDto(usuario.getEmpresa().getId()));
@@ -58,7 +58,7 @@ public class UsuarioController {
     @PutMapping("/{id}")
     public ResponseEntity<UsuarioResponse> actualizar(@AuthenticationPrincipal Usuario usuario, @PathVariable Integer id,
             @Valid @RequestBody UsuarioUpdateRequest datos) {
-        return ResponseEntity.ok(usuarioService.actualizar(id, usuario.getEmpresa().getId(), datos));
+        return ResponseEntity.ok(usuarioService.actualizar(id, usuario.getEmpresa().getId(), usuario.getId(), datos));
     }
 
     // No borra: desactiva al usuario (conserva su historial) y cierra sus sesiones

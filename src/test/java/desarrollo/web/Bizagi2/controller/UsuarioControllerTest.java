@@ -83,7 +83,7 @@ class UsuarioControllerTest {
     @DisplayName("PUT /api/usuarios/{id} responde 200")
     void actualizar() {
         UsuarioUpdateRequest datos = new UsuarioUpdateRequest();
-        when(usuarioService.actualizar(2, EMPRESA_ID, datos)).thenReturn(respuestaUsuario);
+        when(usuarioService.actualizar(2, EMPRESA_ID, usuario.getId(), datos)).thenReturn(respuestaUsuario);
 
         assertThat(controller.actualizar(usuario, 2, datos).getBody()).isSameAs(respuestaUsuario);
     }
