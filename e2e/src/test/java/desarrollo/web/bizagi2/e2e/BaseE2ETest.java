@@ -1,6 +1,8 @@
 package desarrollo.web.bizagi2.e2e;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.jupiter.api.AfterEach;
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -126,8 +129,40 @@ abstract class BaseE2ETest {
         visible(By.id("email"));
     }
 
-    // HU-01: registra una empresa nueva con datos unicos y queda con la sesion iniciada
+    // HU-01: registra una empresa nueva con datos unicos y queda con la sesion iniciada.
+    // Staging corre en hardware modesto: si el primer envio no lleva a la lista de procesos
+    // (peticion lenta, o un formulario que Angular aun no tenia listo y que no envia nada), se repite
+    // una vez con datos nuevos. Si vuelve a fallar, el error cuenta que mostraba la pantalla.
     protected Cuenta registrarEmpresa() {
+        Cuenta cuenta = enviarRegistro();
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(15)).until(ExpectedConditions.urlContains("/procesos"));
+        } catch (TimeoutException primerIntento) {
+            String primerMotivo = describirPantalla();
+            cuenta = enviarRegistro();
+            try {
+                esperarPantallaProcesos();
+            } catch (TimeoutException segundoIntento) {
+                throw new AssertionError("No se pudo registrar la empresa en dos intentos. Primero: "
+                        + primerMotivo + ". Segundo: " + describirPantalla(), segundoIntento);
+            }
+            return cuenta;
+        }
+        esperarPantallaProcesos();
+        return cuenta;
+    }
+
+    // Direccion actual y mensajes de error visibles (del formulario o de sus campos), para diagnosticar un fallo
+    private String describirPantalla() {
+        List<String> errores = new ArrayList<>();
+        for (WebElement error : driver.findElements(By.cssSelector("p.form-error, span.field-error"))) {
+            errores.add(error.getText().trim());
+        }
+        return "url=" + driver.getCurrentUrl()
+                + (errores.isEmpty() ? ", sin mensajes de error en pantalla" : ", errores en pantalla=" + errores);
+    }
+
+    private Cuenta enviarRegistro() {
         String id = identificadorUnico();
         Cuenta cuenta = new Cuenta("Empresa E2E " + id, "admin." + id + "@example.com", PASSWORD);
 
@@ -140,8 +175,6 @@ abstract class BaseE2ETest {
         escribir(By.id("password"), cuenta.password());
         escribir(By.id("confirmPassword"), cuenta.password());
         clic(BOTON_ENVIAR);
-
-        esperarPantallaProcesos();
         return cuenta;
     }
 
