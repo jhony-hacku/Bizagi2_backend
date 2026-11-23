@@ -9,6 +9,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.openqa.selenium.By;
+import org.openqa.selenium.ElementClickInterceptedException;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -38,8 +40,8 @@ abstract class BaseE2ETest {
     @RegisterExtension
     final Evidencias evidencias = new Evidencias(() -> driver);
 
-    // Datos de una empresa recien registrada, para iniciar sesion despues
-    protected record Cuenta(String empresa, String email, String password) {
+    // Datos de una empresa recien registrada, para iniciar sesion despues (el NIT sirve para compartirle procesos)
+    protected record Cuenta(String empresa, String email, String password, String nit) {
     }
 
     // Datos de un usuario invitado a la empresa (HU-02)
@@ -81,7 +83,21 @@ abstract class BaseE2ETest {
     }
 
     protected void clic(By localizador) {
-        espera.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+        try {
+            espera.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+        } catch (ElementClickInterceptedException tapado) {
+            // Las notificaciones salen abajo a la derecha y pueden tapar botones (por ejemplo, el Guardar del
+            // panel del editor). Se cierran y se vuelve a intentar.
+            cerrarNotificaciones();
+            espera.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+        }
+    }
+
+    // Cierra todas las notificaciones visibles con su boton "x" y espera a que desaparezcan
+    protected void cerrarNotificaciones() {
+        ((JavascriptExecutor) driver).executeScript(
+                "document.querySelectorAll(\"section[aria-label='Notificaciones'] .toast button.cerrar\").forEach(b => b.click());");
+        esperarQueDesaparezca(By.cssSelector("section[aria-label='Notificaciones'] .toast"));
     }
 
     // Espera a que el elemento tenga exactamente ese texto (util cuando primero muestra "Cargando...")
@@ -96,6 +112,35 @@ abstract class BaseE2ETest {
 
     protected void seleccionar(By localizador, String valor) {
         new Select(visible(localizador)).selectByValue(valor);
+    }
+
+    // Elige una opcion por el texto que ve el usuario. Sirve para las listas cuyas opciones son ids
+    // (Angular ngValue) y espera a que la opcion exista, porque muchas se llenan tras consultar al backend.
+    protected void seleccionarTexto(By localizador, String texto) {
+        espera.until(d -> {
+            for (WebElement opcion : d.findElement(localizador).findElements(By.tagName("option"))) {
+                if (opcion.getText().trim().equals(texto)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        new Select(visible(localizador)).selectByVisibleText(texto);
+    }
+
+    // Textos de las opciones de una lista desplegable, tal como los ve el usuario
+    protected List<String> opciones(By localizador) {
+        List<String> textos = new ArrayList<>();
+        for (WebElement opcion : visible(localizador).findElements(By.tagName("option"))) {
+            textos.add(opcion.getText().trim());
+        }
+        return textos;
+    }
+
+    // Espera una notificacion emergente que contenga ese texto y devuelve su texto completo
+    protected String esperarNotificacion(String fragmento) {
+        return visible(By.xpath("//section[@aria-label='Notificaciones']//div[contains(@class,'toast')]/p[contains(normalize-space(),"
+                + literal(fragmento) + ")]")).getText().trim();
     }
 
     // Espera a que un campo ya tenga cargado ese valor (los formularios de edicion se llenan tras consultar al backend)
@@ -139,6 +184,14 @@ abstract class BaseE2ETest {
             new WebDriverWait(driver, Duration.ofSeconds(15)).until(ExpectedConditions.urlContains("/procesos"));
         } catch (TimeoutException primerIntento) {
             String primerMotivo = describirPantalla();
+            // El primer registro pudo terminar justo despues de los 15 s (backend recien desplegado y en frio).
+            // En ese caso la sesion ya quedo iniciada y la app manda de /register-company a /procesos.
+            abrir("/register-company");
+            espera.until(d -> estaEn("/procesos") || !d.findElements(By.id("nombreEmpresa")).isEmpty());
+            if (estaEn("/procesos")) {
+                esperarPantallaProcesos();
+                return cuenta;
+            }
             cuenta = enviarRegistro();
             try {
                 esperarPantallaProcesos();
@@ -164,11 +217,11 @@ abstract class BaseE2ETest {
 
     private Cuenta enviarRegistro() {
         String id = identificadorUnico();
-        Cuenta cuenta = new Cuenta("Empresa E2E " + id, "admin." + id + "@example.com", PASSWORD);
+        Cuenta cuenta = new Cuenta("Empresa E2E " + id, "admin." + id + "@example.com", PASSWORD, "E2E-" + id);
 
         abrir("/register-company");
         escribir(By.id("nombreEmpresa"), cuenta.empresa());
-        escribir(By.id("nit"), "E2E-" + id);
+        escribir(By.id("nit"), cuenta.nit());
         escribir(By.id("emailContacto"), "contacto." + id + "@example.com");
         escribir(By.id("nombre"), "Admin E2E");
         escribir(By.id("email"), cuenta.email());
@@ -212,6 +265,10 @@ abstract class BaseE2ETest {
 
     // HU-04: crea un proceso desde la lista y espera a verlo en ella
     protected void crearProceso(String nombre, String categoria) {
+        if (!driver.getCurrentUrl().endsWith("/procesos")) {
+            abrir("/procesos");
+            esperarPantallaProcesos();
+        }
         clic(By.linkText("Nuevo proceso"));
         escribir(By.id("nombre"), nombre);
         escribir(By.id("descripcion"), "Proceso creado por una prueba E2E");
@@ -231,6 +288,19 @@ abstract class BaseE2ETest {
     // Una entrada del historial con esa accion (CREAR, EDITAR, ELIMINAR...)
     protected static By entradaHistorial(String accion) {
         return By.xpath("//article[.//span[contains(@class,'accion') and normalize-space()='" + accion + "']]");
+    }
+
+    // Una entrada del historial con esa accion y cuyo detalle contiene el texto
+    protected static By entradaHistorial(String accion, String detalle) {
+        return By.xpath("//article[.//span[contains(@class,'accion') and normalize-space()='" + accion + "']"
+                + " and .//p[contains(normalize-space()," + literal(detalle) + ")]]");
+    }
+
+    // Va a la lista de procesos y abre el historial de ese proceso
+    protected void verHistorialProceso(String nombre) {
+        abrir("/procesos");
+        esperarPantallaProcesos();
+        abrirHistorial(nombre);
     }
 
     protected void volverAProcesos() {
@@ -284,12 +354,50 @@ abstract class BaseE2ETest {
         return invitado;
     }
 
+    // ---------- Roles de proceso (HU-17 a HU-20) ----------
+
+    protected static By filaRol(String nombre) {
+        return By.xpath(xpathFilaProceso(nombre));
+    }
+
+    protected static By enFilaRol(String nombre, String xpathRelativo) {
+        return By.xpath(xpathFilaProceso(nombre) + xpathRelativo);
+    }
+
+    protected static By accionRol(String nombre, String texto) {
+        return enFilaRol(nombre, "//button[normalize-space()='" + texto + "']");
+    }
+
+    // Se abre por direccion: asi tambien funciona desde el editor, que no tiene el menu principal
+    protected void abrirRoles() {
+        abrir("/roles");
+        espera.until(ExpectedConditions.textToBe(By.cssSelector("main h1"), "Roles de proceso"));
+    }
+
+    // HU-17: el administrador crea un rol de proceso y espera a verlo en la lista
+    protected void crearRol(String nombre, String descripcion) {
+        abrirRoles();
+        clic(By.xpath("//button[normalize-space()='Nuevo rol']"));
+        escribir(By.id("nombre"), nombre);
+        escribir(By.id("descripcion"), descripcion);
+        clic(BOTON_ENVIAR);
+        visible(filaRol(nombre));
+    }
+
     private static String xpathFilaProceso(String nombre) {
         return "//tr[td/strong[normalize-space()='" + nombre + "']]";
     }
 
     private static String xpathFilaUsuario(String email) {
         return "//tr[td/span[contains(@class,'sub') and normalize-space()='" + email + "']]";
+    }
+
+    // Texto entre comillas para XPath (admite textos con comillas simples)
+    protected static String literal(String texto) {
+        if (!texto.contains("'")) {
+            return "'" + texto + "'";
+        }
+        return "concat('" + texto.replace("'", "', \"'\", '") + "')";
     }
 
     protected static String identificadorUnico() {
