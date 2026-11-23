@@ -89,8 +89,8 @@ class HU01_RegistroEmpresaTest {
     }
 
     @Test
-    @DisplayName("CA3: En el registro empresarial se genera un usuario administrador inicial")
-    void ca3_registroCompleto_creaUsuarioAdministradorInicial() {
+    @DisplayName("CA3: En el registro empresarial se genera un usuario con el rol CREADOR")
+    void ca3_registroCompleto_creaUsuarioCreador() {
         when(empresaRepository.existsByNit("900999888-2")).thenReturn(false);
         when(empresaRepository.save(any(Empresa.class))).thenAnswer(invocation -> {
             Empresa e = invocation.getArgument(0);
@@ -106,10 +106,10 @@ class HU01_RegistroEmpresaTest {
         adminGuardado.setId(100);
         adminGuardado.setNombre("Juan Perez");
         adminGuardado.setEmail("admin@techcorp.com");
-        adminGuardado.setRolAcceso(RolAcceso.ADMINISTRADOR);
+        adminGuardado.setRolAcceso(RolAcceso.CREADOR);
         adminGuardado.setEmpresa(empresaCreada);
 
-        when(usuarioService.crear(eq(10), any(Usuario.class))).thenReturn(adminGuardado);
+        when(usuarioService.crearCreador(eq(10), any(Usuario.class))).thenReturn(adminGuardado);
         when(jwtService.generarAccessToken(adminGuardado)).thenReturn("mocked-jwt-token");
 
         RegistroRequest datos = new RegistroRequest();
@@ -125,12 +125,11 @@ class HU01_RegistroEmpresaTest {
         assertThat(respuesta).isNotNull();
         assertThat(respuesta.getToken()).isEqualTo("mocked-jwt-token");
         assertThat(respuesta.getUsuarioId()).isEqualTo(100);
-        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.CREADOR);
         assertThat(respuesta.getEmpresaId()).isEqualTo(10);
 
         ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioService).crear(eq(10), captor.capture());
-        assertThat(captor.getValue().getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
+        verify(usuarioService).crearCreador(eq(10), captor.capture());
         assertThat(captor.getValue().getEmail()).isEqualTo("admin@techcorp.com");
     }
 

@@ -88,7 +88,7 @@ class UsuarioServiceReglasTest {
         when(usuarioRepository.existsByEmail("luis.m@acme.com")).thenReturn(false);
         when(passwordEncoder.encode("NuevaClave123")).thenReturn("$hash");
 
-        Usuario editado = usuarioService.actualizar(2, EMPRESA_ID,
+        Usuario editado = usuarioService.actualizar(2, EMPRESA_ID, 1,
                 cambios(" Luis M ", " Luis.M@acme.com ", "NuevaClave123", RolAcceso.LECTOR));
 
         assertThat(editado.getNombre()).isEqualTo("Luis M");
@@ -105,7 +105,7 @@ class UsuarioServiceReglasTest {
     void actualizarSinCambios() {
         usuarioExistente(editor);
 
-        Usuario editado = usuarioService.actualizar(2, EMPRESA_ID, cambios(" ", "", null, RolAcceso.EDITOR));
+        Usuario editado = usuarioService.actualizar(2, EMPRESA_ID, 1, cambios(" ", "", null, RolAcceso.EDITOR));
 
         assertThat(editado.getNombre()).isEqualTo("Ana Perez");
         assertThat(editado.getEmail()).isEqualTo("luis@acme.com");
@@ -117,7 +117,7 @@ class UsuarioServiceReglasTest {
         when(usuarioRepository.buscarParaActualizar(2)).thenReturn(Optional.of(editor));
         when(usuarioRepository.existsByEmail("ana@acme.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> usuarioService.actualizar(2, EMPRESA_ID, cambios(null, "ana@acme.com", null, null)))
+        assertThatThrownBy(() -> usuarioService.actualizar(2, EMPRESA_ID, 1, cambios(null, "ana@acme.com", null, null)))
                 .isInstanceOf(ConflictoDominioException.class);
     }
 
@@ -128,7 +128,7 @@ class UsuarioServiceReglasTest {
         when(usuarioRepository.buscarParaActualizar(1)).thenReturn(Optional.of(admin));
         when(usuarioRepository.findByEmpresaId(EMPRESA_ID)).thenReturn(List.of(admin, editor));
 
-        assertThatThrownBy(() -> usuarioService.actualizar(1, EMPRESA_ID, cambios(null, null, null, RolAcceso.EDITOR)))
+        assertThatThrownBy(() -> usuarioService.actualizar(1, EMPRESA_ID, 1, cambios(null, null, null, RolAcceso.EDITOR)))
                 .isInstanceOf(ConflictoDominioException.class)
                 .hasMessageContaining("administrador");
     }
@@ -142,7 +142,7 @@ class UsuarioServiceReglasTest {
         usuarioExistente(admin);
         when(usuarioRepository.findByEmpresaId(EMPRESA_ID)).thenReturn(List.of(admin, otroAdmin));
 
-        Usuario editado = usuarioService.actualizar(1, EMPRESA_ID, cambios(null, null, null, RolAcceso.EDITOR));
+        Usuario editado = usuarioService.actualizar(1, EMPRESA_ID, 1, cambios(null, null, null, RolAcceso.EDITOR));
 
         assertThat(editado.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);
     }

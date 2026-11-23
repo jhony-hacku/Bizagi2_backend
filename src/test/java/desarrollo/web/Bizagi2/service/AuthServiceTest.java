@@ -44,7 +44,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     @Test
-    @DisplayName("HU-01 CA3 & CA4: Registrar empresa y administrador inicial devuelve token y metadatos")
+    @DisplayName("HU-01 CA3 & CA4: Registrar empresa y su creador devuelve token y metadatos")
     void registrar_datosCompletos_exito() {
         Empresa empresa = new Empresa();
         empresa.setId(1);
@@ -54,11 +54,11 @@ class AuthServiceTest {
         admin.setId(10);
         admin.setNombre("Carlos Admin");
         admin.setEmail("admin@tech.com");
-        admin.setRolAcceso(RolAcceso.ADMINISTRADOR);
+        admin.setRolAcceso(RolAcceso.CREADOR);
         admin.setEmpresa(empresa);
 
         when(empresaService.crear("Tech SA", "900111222", "info@tech.com")).thenReturn(empresa);
-        when(usuarioService.crear(eq(1), any(Usuario.class))).thenReturn(admin);
+        when(usuarioService.crearCreador(eq(1), any(Usuario.class))).thenReturn(admin);
         when(jwtService.generarAccessToken(admin)).thenReturn("token.jwt.valido");
         when(refreshTokenService.iniciarFamilia(admin)).thenReturn("refresh.registro");
 
@@ -78,7 +78,7 @@ class AuthServiceTest {
         assertThat(respuesta.getToken()).isEqualTo("token.jwt.valido");
         assertThat(respuesta.getUsuarioId()).isEqualTo(10);
         assertThat(respuesta.getEmpresaId()).isEqualTo(1);
-        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.ADMINISTRADOR);
+        assertThat(respuesta.getRolAcceso()).isEqualTo(RolAcceso.CREADOR);
     }
 
     @Test

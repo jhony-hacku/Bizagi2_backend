@@ -7,7 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// HU-01: lo que envia el cliente para registrar una empresa y su administrador inicial
+// HU-01: lo que envia el cliente para registrar una empresa y su creador
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

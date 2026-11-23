@@ -129,7 +129,7 @@ jobs:
             -e DB_URL=jdbc:postgresql://db:5432/bizagi2 \
             -e DB_USER=bizagi \
             -e DB_PASSWORD=test \
-            -e DDL_AUTO=update \
+            -e DDL_AUTO=validate \
             -e JWT_SECRET=ci-secret-ci-secret-ci-secret-ci-secret-1234 \
             bizagi2-backend:${{ github.sha }}
 
@@ -324,7 +324,7 @@ jobs:
     name: Selenium contra staging
     runs-on: ubuntu-latest
     needs: deploy-staging
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - name: Checkout

@@ -162,7 +162,7 @@
          "pm.test('Respuesta contiene token', () => pm.expect(body.token).to.be.a('string'));",
          "pm.test('Respuesta contiene usuarioId', () => pm.expect(body.usuarioId).to.be.a('number'));",
          "pm.test('Respuesta contiene empresaId', () => pm.expect(body.empresaId).to.be.a('number'));",
-         "pm.test('Rol es ADMINISTRADOR', () => pm.expect(body.rolAcceso).to.eql('ADMINISTRADOR'));",
+         "pm.test('Rol es CREADOR', () => pm.expect(body.rolAcceso).to.eql('CREADOR'));",
          "pm.collectionVariables.set('token', body.token);",
          "pm.collectionVariables.set('usuarioId', body.usuarioId);",
          "pm.collectionVariables.set('empresaId', body.empresaId);"

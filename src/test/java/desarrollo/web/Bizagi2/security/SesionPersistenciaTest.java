@@ -49,7 +49,7 @@ class SesionPersistenciaTest {
         int version = usuario.getVersionSesion();
         Usuario cambios = new Usuario();
         cambios.setPassword("OtraPassword123!");
-        usuarios.actualizar(usuario.getId(), usuario.getEmpresa().getId(), cambios);
+        usuarios.actualizar(usuario.getId(), usuario.getEmpresa().getId(), usuario.getId(), cambios);
         assertThat(usuario(sesion).getVersionSesion()).isEqualTo(version + 1);
         assertThat(jwt.leerAccessClaims(sesion.cuerpo().getToken()).get("v", Integer.class))
                 .isNotEqualTo(usuario(sesion).getVersionSesion());
@@ -145,7 +145,7 @@ class SesionPersistenciaTest {
         Usuario principal = usuario(sesion);
         Usuario cambios = new Usuario();
         cambios.setNombre("Nombre editado");
-        paralelo(() -> usuarios.actualizar(principal.getId(), principal.getEmpresa().getId(), cambios),
+        paralelo(() -> usuarios.actualizar(principal.getId(), principal.getEmpresa().getId(), principal.getId(), cambios),
                 () -> { auth.logout(principal, null); return "logout"; });
         assertThat(usuario(sesion).getVersionSesion()).isEqualTo(1);
         assertThat(usuario(sesion).getNombre()).isEqualTo("Nombre editado");
