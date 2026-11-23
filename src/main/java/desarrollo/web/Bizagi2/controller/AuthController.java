@@ -51,7 +51,7 @@ public class AuthController {
     }
 
     @Operation(
-            summary = "Registrar una empresa y su administrador inicial (devuelve access token y deja el refresh token en una cookie HttpOnly)",
+            summary = "Registrar una empresa y su creador (devuelve access token y deja el refresh token en una cookie HttpOnly)",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(
                     examples = @ExampleObject(value = """
                             {

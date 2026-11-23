@@ -126,7 +126,7 @@ class UsuarioServiceTest {
         cambios.setNombre("Nuevo Nombre");
         cambios.setRolAcceso(RolAcceso.EDITOR);
 
-        Usuario resultado = usuarioService.actualizar(5, 1, cambios);
+        Usuario resultado = usuarioService.actualizar(5, 1, 1, cambios);
 
         assertThat(resultado.getNombre()).isEqualTo("Nuevo Nombre");
         assertThat(resultado.getRolAcceso()).isEqualTo(RolAcceso.EDITOR);

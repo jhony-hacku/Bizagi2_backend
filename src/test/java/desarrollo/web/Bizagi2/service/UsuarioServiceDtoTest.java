@@ -92,9 +92,9 @@ class UsuarioServiceDtoTest {
     @Test
     @DisplayName("actualizar con UsuarioUpdateRequest devuelve el usuario modificado")
     void actualizar() {
-        doReturn(usuario).when(usuarioService).actualizar(eq(1), eq(EMPRESA_ID), any(Usuario.class));
+        doReturn(usuario).when(usuarioService).actualizar(eq(1), eq(EMPRESA_ID), eq(1), any(Usuario.class));
 
-        UsuarioResponse dto = usuarioService.actualizar(1, EMPRESA_ID, new UsuarioUpdateRequest("Ana", null, null, null));
+        UsuarioResponse dto = usuarioService.actualizar(1, EMPRESA_ID, 1, new UsuarioUpdateRequest("Ana", null, null, null));
 
         assertThat(dto.getId()).isEqualTo(1);
     }

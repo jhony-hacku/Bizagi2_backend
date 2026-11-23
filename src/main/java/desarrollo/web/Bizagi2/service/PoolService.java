@@ -55,7 +55,7 @@ public class PoolService {
 
     // HU-24: el administrador siempre puede; el editor solo si la empresa lo permite; el lector nunca
     public void verificarPermisoEstructura(Usuario usuario) {
-        boolean puede = usuario.getRolAcceso() == RolAcceso.ADMINISTRADOR
+        boolean puede = usuario.getRolAcceso().puedeAdministrar()
                 || (usuario.getRolAcceso() == RolAcceso.EDITOR
                         && !Boolean.FALSE.equals(usuario.getEmpresa().getEditorModificaEstructura()));
         if (!puede) {

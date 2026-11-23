@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import org.modelmapper.ModelMapper;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -59,10 +60,20 @@ public class UsuarioService {
 
     // Crea un usuario dentro de la empresa indicada (la empresa nunca viene del cliente)
     public Usuario crear(Integer empresaId, Usuario datos) {
+        verificarRolAsignable(datos.getRolAcceso());
+        return persistirNuevo(empresaId, datos, datos.getRolAcceso());
+    }
+
+    // Lo usa el registro de empresa dentro de la misma transaccion que la crea.
+    public Usuario crearCreador(Integer empresaId, Usuario datos) {
+        return persistirNuevo(empresaId, datos, RolAcceso.CREADOR);
+    }
+
+    private Usuario persistirNuevo(Integer empresaId, Usuario datos, RolAcceso rol) {
         requerido(datos.getNombre(), "nombre");
         requerido(datos.getEmail(), "email");
         requerido(datos.getPassword(), "password");
-        requerido(datos.getRolAcceso(), "rolAcceso");
+        requerido(rol, "rolAcceso");
         emailValido(datos.getEmail().trim());
         passwordValido(datos.getPassword());
 
@@ -76,14 +87,26 @@ public class UsuarioService {
         usuario.setNombre(datos.getNombre().trim());
         usuario.setEmail(email);
         usuario.setPassword(passwordEncoder.encode(datos.getPassword()));
-        usuario.setRolAcceso(datos.getRolAcceso());
+        usuario.setRolAcceso(rol);
         usuario.setActivo(true);
         return usuarioRepository.save(usuario);
     }
 
     // Solo cambia los campos que vengan con valor; la contrasena es opcional
-    public Usuario actualizar(Integer id, Integer empresaId, Usuario datos) {
+    public Usuario actualizar(Integer id, Integer empresaId, Integer actorId, Usuario datos) {
         Usuario usuario = bloquearEnEmpresa(id, empresaId);
+        if (!id.equals(actorId)) {
+            protegerCreador(usuario);
+        }
+        RolAcceso nuevoRol = datos.getRolAcceso();
+        if (nuevoRol != null && nuevoRol != usuario.getRolAcceso()) {
+            protegerCreador(usuario);
+            verificarRolAsignable(nuevoRol);
+            if (usuario.getRolAcceso() == RolAcceso.ADMINISTRADOR && usuario.isActivo()) {
+                verificarQueQuedaOtroAdministrador(usuario, empresaId);
+            }
+            usuario.setRolAcceso(nuevoRol);
+        }
 
         if (datos.getNombre() != null && !datos.getNombre().isBlank()) {
             usuario.setNombre(datos.getNombre().trim());
@@ -102,12 +125,6 @@ public class UsuarioService {
             usuario.setVersionSesion(usuario.getVersionSesion() + 1);
             refreshTokenRepository.eliminarDeUsuario(id);
         }
-        if (datos.getRolAcceso() != null && datos.getRolAcceso() != usuario.getRolAcceso()) {
-            if (usuario.getRolAcceso() == RolAcceso.ADMINISTRADOR && usuario.isActivo()) {
-                verificarQueQuedaOtroAdministrador(usuario, empresaId);
-            }
-            usuario.setRolAcceso(datos.getRolAcceso());
-        }
         return usuarioRepository.save(usuario);
     }
 
@@ -115,6 +132,7 @@ public class UsuarioService {
     // Ademas se cierran sus sesiones abiertas.
     public void desactivar(Integer id, Integer empresaId) {
         Usuario usuario = bloquearEnEmpresa(id, empresaId);
+        protegerCreador(usuario);
         if (usuario.getRolAcceso() == RolAcceso.ADMINISTRADOR && usuario.isActivo()) {
             verificarQueQuedaOtroAdministrador(usuario, empresaId);
         }
@@ -126,6 +144,7 @@ public class UsuarioService {
 
     public Usuario activar(Integer id, Integer empresaId) {
         Usuario usuario = bloquearEnEmpresa(id, empresaId);
+        protegerCreador(usuario);
         usuario.setActivo(true);
         return usuarioRepository.save(usuario);
     }
@@ -160,10 +179,22 @@ public class UsuarioService {
         return usuario;
     }
 
-    // La empresa siempre debe conservar un administrador activo
+    private void protegerCreador(Usuario usuario) {
+        if (usuario.getRolAcceso() == RolAcceso.CREADOR) {
+            throw new AccessDeniedException("La cuenta del creador de la empresa esta protegida");
+        }
+    }
+
+    private void verificarRolAsignable(RolAcceso rol) {
+        if (rol == RolAcceso.CREADOR) {
+            throw new AccessDeniedException("El rol de creador se asigna al registrar la empresa");
+        }
+    }
+
+    // La empresa siempre debe conservar una cuenta activa con permisos de administracion.
     private void verificarQueQuedaOtroAdministrador(Usuario usuario, Integer empresaId) {
         boolean hayOtro = usuarioRepository.findByEmpresaId(empresaId).stream()
-                .anyMatch(u -> u.getRolAcceso() == RolAcceso.ADMINISTRADOR && u.isActivo()
+                .anyMatch(u -> u.isActivo() && u.getRolAcceso().puedeAdministrar()
                         && !u.getId().equals(usuario.getId()));
         if (!hayOtro) {
             throw new ConflictoDominioException("La empresa debe conservar al menos un administrador activo");
@@ -191,8 +222,8 @@ public class UsuarioService {
         return aResponse(crear(empresaId, modelMapper.map(datos, Usuario.class)));
     }
 
-    public UsuarioResponse actualizar(Integer id, Integer empresaId, UsuarioUpdateRequest datos) {
-        return aResponse(actualizar(id, empresaId, modelMapper.map(datos, Usuario.class)));
+    public UsuarioResponse actualizar(Integer id, Integer empresaId, Integer actorId, UsuarioUpdateRequest datos) {
+        return aResponse(actualizar(id, empresaId, actorId, modelMapper.map(datos, Usuario.class)));
     }
 
     public UsuarioResponse activarDto(Integer id, Integer empresaId) {
