@@ -21,7 +21,7 @@ public class LoginIntentos {
         long ahora = Instant.now().getEpochSecond();
         intentos.values().removeIf(ventana -> ventana.vence() <= ahora);
         String cuenta = "cuenta:" + (email == null ? "" : email.trim().toLowerCase(Locale.ROOT));
-        String origen = "ip:" + ip; // No se confia en X-Forwarded-For enviado por el cliente.
+        String origen = "ip:" + ip; // IP real resuelta por nginx; X-Forwarded-For del cliente se descarta alli.
         if (intentos.size() + 2 > MAX_ENTRADAS
                 || cantidad(cuenta) >= 10 || cantidad(origen) >= 100) {
             return false;
