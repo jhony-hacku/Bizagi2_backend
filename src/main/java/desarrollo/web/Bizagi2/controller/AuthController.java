@@ -32,7 +32,9 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -78,11 +80,16 @@ public class AuthController {
                             }"""))))
     @PostMapping("/login")
     public ResponseEntity<Object> login(@Valid @RequestBody LoginRequest datos, HttpServletRequest request) {
-        if (!loginIntentos.permitir(request.getRemoteAddr(), datos.getEmail())) {
+        // En produccion getRemoteAddr() es la IP real del usuario (forward-headers-strategy: native).
+        // Solo se dejan caracteres de una IPv4/IPv6 para que nada extrano termine en el log.
+        String ip = request.getRemoteAddr().replaceAll("[^0-9A-Fa-f:.]", "");
+        if (!loginIntentos.permitir(ip, datos.getEmail())) {
+            log.warn("Inicio de sesion bloqueado por exceso de intentos desde {}", ip);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, "300")
                     .body(error(HttpStatus.TOO_MANY_REQUESTS, "Demasiados intentos. Intenta de nuevo mas tarde"));
         }
+        log.info("Inicio de sesion solicitado desde {}", ip);
         Sesion sesion = authService.login(datos);
         return conSesion(HttpStatus.OK, sesion).body(sesion.cuerpo());
     }
